@@ -2,234 +2,66 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pit Checker — Prototype</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Pit Checker</title>
 <style>
   :root{
-    --paper:#EEF2F1;
-    --grid:#DCE4E2;
-    --ink:#16232E;
-    --wall:#16232E;
-    --wall-fill:#C7D0CC;
-    --pipe:#4C7A92;
-    --pipe-fail:#B54834;
-    --pass:#3C7A5C;
-    --fail:#B54834;
-    --panel-bg:#FFFFFF;
-    --accent:#C77A34;
-    --line-muted:#5C6B67;
+    --paper:#EEF2F1; --grid:#DCE4E2; --ink:#16232E;
+    --wall:#16232E; --wall-fill:#C7D0CC; --pipe:#4C7A92; --pipe-fail:#B54834;
+    --pass:#3C7A5C; --fail:#B54834; --panel-bg:#FFFFFF; --accent:#C77A34; --line-muted:#5C6B67;
   }
   *{box-sizing:border-box;}
-  html,body{
-    margin:0; padding:0; height:100%;
-    background:var(--paper);
-    color:var(--ink);
-    font-family:'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-    overflow-x:hidden;
-    width:100%;
-  }
-  body{
-    background-image:
-      linear-gradient(var(--grid) 1px, transparent 1px),
-      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-    background-size: 28px 28px;
-  }
-  .app{
-    display:flex;
-    flex-direction:column;
-    min-height:100vh;
-    min-height:100dvh;
-  }
-  header{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:10px;
-    padding:12px 14px;
-    background:var(--ink);
-    color:#EEF2F1;
-    flex-wrap:wrap;
-  }
-  header .title{
-    font-size:15px;
-    letter-spacing:0.02em;
-    min-width:0;
-  }
-  header .title b{ font-weight:700; }
-  header .title span{
-    display:block;
-    font-size:11px;
-    color:#9DB0A8;
-    margin-top:2px;
-  }
-  #toggleBtn{
-    background:transparent;
-    border:1px solid #4C5B54;
-    color:#EEF2F1;
-    padding:7px 12px;
-    border-radius:3px;
-    font-size:12.5px;
-    cursor:pointer;
-  }
+  html,body{ margin:0; padding:0; height:100%; background:var(--paper); color:var(--ink);
+    font-family:'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; overflow-x:hidden; width:100%; }
+  body{ background-image:linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px); background-size:28px 28px; }
+  .app{ display:flex; flex-direction:column; min-height:100vh; min-height:100dvh; }
+  header{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px 14px; background:var(--ink); color:#EEF2F1; flex-wrap:wrap; }
+  header .title{ font-size:15px; letter-spacing:0.02em; min-width:0; }
+  header .title span{ display:block; font-size:11px; color:#9DB0A8; margin-top:2px; }
+  #toggleBtn{ background:transparent; border:1px solid #4C5B54; color:#EEF2F1; padding:7px 12px; border-radius:3px; font-size:12.5px; cursor:pointer; }
   #toggleBtn:hover{ background:#243141; }
-
-  .body-row{
-    display:flex;
-    flex:1;
-    min-height:0;
-    width:100%;
-  }
-  .panel{
-    width:320px;
-    max-width:85vw;
-    flex-shrink:0;
-    background:var(--panel-bg);
-    border-right:1px solid var(--grid);
-    padding:16px;
-    overflow-y:auto;
-    max-height: calc(100vh - 54px);
-    max-height: calc(100dvh - 54px);
-    transition: margin-left 0.18s ease, opacity 0.18s ease;
-  }
-  .panel.hidden{
-    margin-left:-320px;
-    opacity:0;
-    pointer-events:none;
-  }
+  .body-row{ display:flex; flex:1; min-height:0; width:100%; position:relative; }
+  .panel{ width:320px; max-width:85vw; flex-shrink:0; background:var(--panel-bg); border-right:1px solid var(--grid);
+    padding:16px; overflow-y:auto; max-height:calc(100vh - 54px); max-height:calc(100dvh - 54px);
+    transition:margin-left 0.18s ease, opacity 0.18s ease; }
+  .panel.hidden{ margin-left:-320px; opacity:0; pointer-events:none; }
   .field{ margin-bottom:12px; }
-  .field label{
-    display:block;
-    font-size:11px;
-    color:var(--line-muted);
-    margin-bottom:4px;
-    letter-spacing:0.01em;
-  }
-  .field input, .field select{
-    width:100%;
-    padding:8px;
-    border:1px solid #C7D0CC;
-    border-radius:3px;
-    font-size:16px;
-    background:#FBFCFB;
-    color:var(--ink);
-  }
-  .pipe-card input[type="text"]{ font-size:16px; }
-  .field-row{
-    display:flex;
-    gap:8px;
-  }
+  .field label{ display:block; font-size:11px; color:var(--line-muted); margin-bottom:4px; }
+  .field input, .field select{ width:100%; padding:8px; border:1px solid #C7D0CC; border-radius:3px; font-size:16px; background:#FBFCFB; color:var(--ink); }
+  .field-row{ display:flex; gap:8px; }
   .field-row .field{ flex:1; }
-  .section-label{
-    font-size:12px;
-    font-weight:700;
-    text-transform:uppercase;
-    letter-spacing:0.06em;
-    color:var(--ink);
-    border-bottom:2px solid var(--ink);
-    padding-bottom:5px;
-    margin:18px 0 12px;
-  }
+  .checkbox-row{ display:flex; align-items:center; gap:7px; font-size:12.5px; margin:6px 0 10px; }
+  .checkbox-row input{ width:auto; }
+  .section-label{ font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--ink);
+    border-bottom:2px solid var(--ink); padding-bottom:5px; margin:18px 0 12px; display:flex; justify-content:space-between; align-items:center; }
   .section-label:first-child{ margin-top:0; }
-
-  .pipe-card{
-    border:1px solid var(--grid);
-    border-radius:4px;
-    padding:10px;
-    margin-bottom:10px;
-    background:#F7F9F8;
-    position:relative;
-  }
-  .pipe-card .pipe-head{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    margin-bottom:8px;
-  }
-  .pipe-card .pipe-head b{ font-size:12.5px; }
-  .remove-btn{
-    background:none;
-    border:none;
-    color:var(--fail);
-    font-size:12px;
-    cursor:pointer;
-    padding:2px 6px;
-  }
-  .add-btn{
-    width:100%;
-    padding:9px;
-    background:var(--ink);
-    color:#EEF2F1;
-    border:none;
-    border-radius:3px;
-    font-size:12.5px;
-    cursor:pointer;
-    margin-top:4px;
-  }
+  .pit-item{ display:flex; align-items:center; justify-content:space-between; gap:6px; padding:8px 9px; border:1px solid var(--grid);
+    border-radius:4px; margin-bottom:6px; background:#F7F9F8; cursor:pointer; font-size:12.5px; }
+  .pit-item.active{ border-color:var(--ink); background:#E9EDEC; font-weight:700; }
+  .pit-item .pit-actions{ display:flex; gap:4px; flex-shrink:0; }
+  .icon-btn{ background:none; border:none; cursor:pointer; font-size:13px; padding:2px 5px; color:var(--line-muted); }
+  .icon-btn:hover{ color:var(--ink); }
+  .icon-btn.danger:hover{ color:var(--fail); }
+  .add-btn{ width:100%; padding:9px; background:var(--ink); color:#EEF2F1; border:none; border-radius:3px; font-size:12.5px; cursor:pointer; margin-top:4px; }
   .add-btn:hover{ background:#243141; }
-
-  .canvas-wrap{
-    flex:1;
-    min-width:0;
-    display:flex;
-    flex-direction:column;
-    padding:18px;
-  }
-  .status-banner{
-    display:flex;
-    align-items:center;
-    gap:10px;
-    padding:10px 14px;
-    border-radius:4px;
-    font-size:13px;
-    margin-bottom:14px;
-    font-weight:600;
-  }
+  .pipe-card{ border:1px solid var(--grid); border-radius:4px; padding:10px; margin-bottom:10px; background:#F7F9F8; }
+  .pipe-card .pipe-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:6px; }
+  .pipe-card .pipe-head b{ font-size:12.5px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .reorder-btns{ display:flex; gap:2px; }
+  .remove-btn{ background:none; border:none; color:var(--fail); font-size:12px; cursor:pointer; padding:2px 6px; }
+  .auto-offset-display{ font-size:12px; color:var(--line-muted); padding:8px; background:#EFF2F1; border-radius:3px; border:1px dashed #C7D0CC; }
+  .canvas-wrap{ flex:1; min-width:0; display:flex; flex-direction:column; padding:18px; }
+  .status-banner{ display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:4px; font-size:13px; margin-bottom:14px; font-weight:600; }
   .status-banner.pass{ background:#E4F0E8; color:var(--pass); border:1px solid #BEDBC8; }
   .status-banner.fail{ background:#F5E5DF; color:var(--fail); border:1px solid #E5BEAF; }
-  .status-dot{
-    width:9px; height:9px; border-radius:50%;
-    background:currentColor;
-    flex-shrink:0;
-  }
-
-  .svg-frame{
-    flex:1;
-    min-height:400px;
-    background:#FBFCFB;
-    border:1px solid var(--grid);
-    border-radius:4px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-  }
+  .status-dot{ width:9px; height:9px; border-radius:50%; background:currentColor; flex-shrink:0; }
+  .svg-frame{ flex:1; min-height:400px; background:#FBFCFB; border:1px solid var(--grid); border-radius:4px; display:flex; align-items:center; justify-content:center; }
   svg{ width:100%; height:100%; }
-
-  .issue-list{
-    margin-top:12px;
-    font-size:12.5px;
-  }
-  .issue-list .issue{
-    padding:7px 10px;
-    border-left:3px solid var(--fail);
-    background:#F5E5DF;
-    margin-bottom:6px;
-    border-radius:0 3px 3px 0;
-    color:#7A3521;
-  }
-
+  .issue-list{ margin-top:12px; font-size:12.5px; }
+  .issue-list .issue{ padding:7px 10px; border-left:3px solid var(--fail); background:#F5E5DF; margin-bottom:6px; border-radius:0 3px 3px 0; color:#7A3521; }
+  .save-note{ font-size:10.5px; color:var(--line-muted); text-align:center; margin-top:14px; }
   @media (max-width: 760px){
-    .body-row{ position:relative; }
-    .panel{
-      position:fixed;
-      z-index:5;
-      top:0; left:0;
-      bottom:0;
-      width:85vw;
-      max-width:320px;
-      max-height:none;
-      padding-top:66px;
-      box-shadow:2px 0 12px rgba(0,0,0,0.15);
-    }
+    .panel{ position:fixed; z-index:5; top:0; left:0; bottom:0; width:85vw; max-width:320px; max-height:none; padding-top:66px; box-shadow:2px 0 12px rgba(0,0,0,0.15); }
     .panel.hidden{ margin-left:-85vw; }
     .canvas-wrap{ padding:12px; }
     .svg-frame{ min-height:280px; }
@@ -241,48 +73,46 @@
 <body>
 <div class="app">
   <header>
-    <div class="title"><b>Pit Checker</b><span>Prototype — top view · pipe fit &amp; clearance</span></div>
+    <div class="title"><b>Pit Checker</b><span>Top view · pipe fit &amp; clearance</span></div>
     <button id="toggleBtn">Hide inputs</button>
   </header>
-
   <div class="body-row">
     <div class="panel" id="panel">
-      <div class="section-label">Pit</div>
+      <div class="section-label">Project</div>
+      <div class="field">
+        <label>Project name</label>
+        <input id="projectName" type="text" value="Project 01">
+      </div>
+      <div id="pitList"></div>
+      <button class="add-btn" id="addPitBtn">+ Add pit</button>
+
+      <div class="section-label">Pit settings</div>
       <div class="field">
         <label>Pit name</label>
-        <input id="pitName" type="text" value="Pit 01">
+        <input id="pitName" type="text">
       </div>
       <div class="field-row">
-        <div class="field">
-          <label>Internal width (mm) — E/W</label>
-          <input id="pitWidth" type="number" value="600" step="10">
-        </div>
-        <div class="field">
-          <label>Internal length (mm) — N/S</label>
-          <input id="pitLength" type="number" value="600" step="10">
-        </div>
+        <div class="field"><label>Internal width (mm) — E/W</label><input id="pitWidth" type="number" step="10"></div>
+        <div class="field"><label>Internal length (mm) — N/S</label><input id="pitLength" type="number" step="10"></div>
       </div>
       <div class="field-row">
-        <div class="field">
-          <label>Wall thickness (mm)</label>
-          <input id="wallThk" type="number" value="75" step="5">
-        </div>
-        <div class="field">
-          <label>Min corner clearance (mm)</label>
-          <input id="cornerClear" type="number" value="150" step="10">
-        </div>
+        <div class="field"><label>Wall thickness (mm)</label><input id="wallThk" type="number" step="5"></div>
+        <div class="field"><label>Min corner clearance (mm)</label><input id="cornerClear" type="number" step="10"></div>
+      </div>
+      <div class="field">
+        <label>Default pipe spacing, centre-to-centre (mm)</label>
+        <input id="pipeSpacing" type="number" step="10">
       </div>
 
       <div class="section-label">Pipes</div>
       <div id="pipeList"></div>
       <button class="add-btn" id="addPipeBtn">+ Add pipe</button>
+      <div class="save-note" id="saveNote">Saved locally in this browser</div>
     </div>
 
     <div class="canvas-wrap">
       <div class="status-banner" id="statusBanner"></div>
-      <div class="svg-frame">
-        <svg id="pitSvg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet"></svg>
-      </div>
+      <div class="svg-frame"><svg id="pitSvg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet"></svg></div>
       <div class="issue-list" id="issueList"></div>
     </div>
   </div>
@@ -290,12 +120,57 @@
 
 <script>
 const SIDES = ["N","E","S","W"];
-let pipes = [
-  { id:1, side:"N", diameter:300, offset:150, angle:0, label:"Inlet 1" },
-  { id:2, side:"S", diameter:375, offset:150, angle:0, label:"Outlet" }
-];
-let nextId = 3;
+let idCounter = 1;
+const newId = () => idCounter++;
 
+function defaultPit(name){
+  return {
+    id:newId(), name:name||"Pit 01", width:600, length:600, wallThk:75, cornerClear:150, spacing:300,
+    pipes:[
+      { id:newId(), label:"Inlet 1", side:"N", diameter:300, angle:0, mode:"auto", offset:300 },
+      { id:newId(), label:"Outlet", side:"S", diameter:375, angle:0, mode:"auto", offset:300 }
+    ]
+  };
+}
+
+let state = { projectName:"Project 01", pits:[ defaultPit("Pit 01") ], activePitId:null };
+state.activePitId = state.pits[0].id;
+
+// ---------- IndexedDB persistence ----------
+let db;
+function openDB(){
+  return new Promise((resolve,reject)=>{
+    const req = indexedDB.open("PitCheckerDB", 1);
+    req.onupgradeneeded = e => { e.target.result.createObjectStore("kv"); };
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror = e => reject(e);
+  });
+}
+function saveState(){
+  if(!db) return;
+  try{
+    const tx = db.transaction("kv","readwrite");
+    tx.objectStore("kv").put(JSON.parse(JSON.stringify(state)), "appState");
+    const note = document.getElementById("saveNote");
+    note.textContent = "Saved " + new Date().toLocaleTimeString();
+  }catch(err){ console.error("Save failed", err); }
+}
+let saveTimer=null;
+function scheduleSave(){ clearTimeout(saveTimer); saveTimer=setTimeout(saveState, 400); }
+
+function loadState(){
+  return new Promise((resolve)=>{
+    if(!db) return resolve(null);
+    const tx = db.transaction("kv","readonly");
+    const req = tx.objectStore("kv").get("appState");
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => resolve(null);
+  });
+}
+
+function getActivePit(){ return state.pits.find(p=>p.id===state.activePitId); }
+
+// ---------- SVG helpers ----------
 function el(tag, attrs, children){
   const e = document.createElementNS("http://www.w3.org/2000/svg", tag);
   for(const k in attrs) e.setAttribute(k, attrs[k]);
@@ -308,75 +183,166 @@ function text(x,y,str,opts={}){
   return t;
 }
 
+// ---------- Pit list panel ----------
+function renderPitList(){
+  const list = document.getElementById("pitList");
+  list.innerHTML = "";
+  state.pits.forEach(pit=>{
+    const row = document.createElement("div");
+    row.className = "pit-item" + (pit.id===state.activePitId ? " active":"");
+    row.innerHTML = `
+      <span>${pit.name}</span>
+      <span class="pit-actions">
+        <button class="icon-btn" data-act="dup" data-id="${pit.id}" title="Duplicate">⧉</button>
+        <button class="icon-btn danger" data-act="del" data-id="${pit.id}" title="Delete">✕</button>
+      </span>`;
+    row.addEventListener("click", (e)=>{
+      if(e.target.closest("button")) return;
+      state.activePitId = pit.id;
+      renderAll();
+    });
+    list.appendChild(row);
+  });
+  list.querySelectorAll("[data-act]").forEach(btn=>{
+    btn.addEventListener("click", e=>{
+      e.stopPropagation();
+      const id = parseInt(btn.dataset.id);
+      if(btn.dataset.act==="del"){
+        if(state.pits.length===1){ alert("A project needs at least one pit."); return; }
+        state.pits = state.pits.filter(p=>p.id!==id);
+        if(state.activePitId===id) state.activePitId = state.pits[0].id;
+      } else if(btn.dataset.act==="dup"){
+        const src = state.pits.find(p=>p.id===id);
+        const copy = JSON.parse(JSON.stringify(src));
+        copy.id = newId();
+        copy.name = src.name + " copy";
+        copy.pipes.forEach(p=>p.id=newId());
+        state.pits.push(copy);
+        state.activePitId = copy.id;
+      }
+      renderAll();
+      scheduleSave();
+    });
+  });
+}
+
+document.getElementById("addPitBtn").addEventListener("click", ()=>{
+  const p = defaultPit("Pit " + String(state.pits.length+1).padStart(2,"0"));
+  state.pits.push(p);
+  state.activePitId = p.id;
+  renderAll();
+  scheduleSave();
+});
+
+// ---------- Pit settings ----------
+function renderPitSettings(){
+  const pit = getActivePit();
+  document.getElementById("pitName").value = pit.name;
+  document.getElementById("pitWidth").value = pit.width;
+  document.getElementById("pitLength").value = pit.length;
+  document.getElementById("wallThk").value = pit.wallThk;
+  document.getElementById("cornerClear").value = pit.cornerClear;
+  document.getElementById("pipeSpacing").value = pit.spacing;
+}
+[["pitName","name",false],["pitWidth","width",true],["pitLength","length",true],
+ ["wallThk","wallThk",true],["cornerClear","cornerClear",true],["pipeSpacing","spacing",true]
+].forEach(([elId,field,isNum])=>{
+  document.getElementById(elId).addEventListener("input", e=>{
+    const pit = getActivePit();
+    pit[field] = isNum ? (parseFloat(e.target.value)||0) : e.target.value;
+    if(field==="name") renderPitList();
+    renderScene();
+    scheduleSave();
+  });
+});
+
+// ---------- Pipe list ----------
 function renderPipeCards(){
+  const pit = getActivePit();
   const list = document.getElementById("pipeList");
   list.innerHTML = "";
-  pipes.forEach(p => {
+  pit.pipes.forEach((p,idx)=>{
     const card = document.createElement("div");
     card.className = "pipe-card";
+    const autoDisplay = p.mode==="auto"
+      ? `<div class="auto-offset-display">Auto-centred: ${Math.round(p._autoOffset||0)}mm from near corner</div>`
+      : `<div class="field"><label>Offset from near corner (mm)</label><input type="number" data-field="offset" data-id="${p.id}" value="${p.offset}" step="10"></div>`;
     card.innerHTML = `
       <div class="pipe-head">
         <b>${p.label}</b>
-        <button class="remove-btn" data-id="${p.id}">Remove</button>
+        <span class="reorder-btns">
+          <button class="icon-btn" data-act="up" data-id="${p.id}" ${idx===0?"disabled":""}>▲</button>
+          <button class="icon-btn" data-act="down" data-id="${p.id}" ${idx===pit.pipes.length-1?"disabled":""}>▼</button>
+        </span>
+        <button class="remove-btn" data-act="remove" data-id="${p.id}">Remove</button>
       </div>
-      <div class="field">
-        <label>Label</label>
-        <input type="text" data-field="label" data-id="${p.id}" value="${p.label}">
-      </div>
+      <div class="field"><label>Label</label><input type="text" data-field="label" data-id="${p.id}" value="${p.label}"></div>
       <div class="field-row">
-        <div class="field">
-          <label>Wall</label>
+        <div class="field"><label>Wall</label>
           <select data-field="side" data-id="${p.id}">
             ${SIDES.map(s=>`<option value="${s}" ${s===p.side?"selected":""}>${s}</option>`).join("")}
           </select>
         </div>
-        <div class="field">
-          <label>OD (mm)</label>
-          <input type="number" data-field="diameter" data-id="${p.id}" value="${p.diameter}" step="15">
-        </div>
+        <div class="field"><label>OD (mm)</label><input type="number" data-field="diameter" data-id="${p.id}" value="${p.diameter}" step="15"></div>
       </div>
-      <div class="field-row">
-        <div class="field">
-          <label>Offset from left corner (mm)</label>
-          <input type="number" data-field="offset" data-id="${p.id}" value="${p.offset}" step="10">
-        </div>
-        <div class="field">
-          <label>Skew angle (° from perp.)</label>
-          <input type="number" data-field="angle" data-id="${p.id}" value="${p.angle}" step="5" min="-60" max="60">
-        </div>
+      <div class="field"><label>Skew angle (° from perpendicular)</label><input type="number" data-field="angle" data-id="${p.id}" value="${p.angle}" step="5" min="-60" max="60"></div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="manual-${p.id}" data-field="mode" data-id="${p.id}" ${p.mode==="manual"?"checked":""}>
+        <label for="manual-${p.id}" style="margin:0;">Manually set offset (otherwise auto-centred with default spacing)</label>
       </div>
+      ${autoDisplay}
     `;
     list.appendChild(card);
   });
 
-  list.querySelectorAll("input,select").forEach(inp=>{
+  list.querySelectorAll("input[type=text],input[type=number],select").forEach(inp=>{
     inp.addEventListener("input", e=>{
       const id = parseInt(e.target.dataset.id);
       const field = e.target.dataset.field;
-      const pipe = pipes.find(p=>p.id===id);
+      const pipe = pit.pipes.find(p=>p.id===id);
       if(!pipe) return;
       pipe[field] = (field==="label"||field==="side") ? e.target.value : parseFloat(e.target.value)||0;
       renderScene();
+      scheduleSave();
     });
   });
-  list.querySelectorAll(".remove-btn").forEach(btn=>{
-    btn.addEventListener("click", e=>{
+  list.querySelectorAll("input[type=checkbox]").forEach(cb=>{
+    cb.addEventListener("change", e=>{
       const id = parseInt(e.target.dataset.id);
-      pipes = pipes.filter(p=>p.id!==id);
+      const pipe = pit.pipes.find(p=>p.id===id);
+      if(!pipe) return;
+      if(e.target.checked){
+        pipe.mode = "manual";
+        pipe.offset = pipe._autoOffset || pipe.offset;
+      } else {
+        pipe.mode = "auto";
+      }
       renderPipeCards();
       renderScene();
+      scheduleSave();
+    });
+  });
+  list.querySelectorAll("[data-act]").forEach(btn=>{
+    btn.addEventListener("click", e=>{
+      const id = parseInt(btn.dataset.id);
+      const act = btn.dataset.act;
+      const idx = pit.pipes.findIndex(p=>p.id===id);
+      if(act==="remove"){ pit.pipes.splice(idx,1); }
+      if(act==="up" && idx>0){ [pit.pipes[idx-1],pit.pipes[idx]]=[pit.pipes[idx],pit.pipes[idx-1]]; }
+      if(act==="down" && idx<pit.pipes.length-1){ [pit.pipes[idx+1],pit.pipes[idx]]=[pit.pipes[idx],pit.pipes[idx+1]]; }
+      renderPipeCards();
+      renderScene();
+      scheduleSave();
     });
   });
 }
 
 document.getElementById("addPipeBtn").addEventListener("click", ()=>{
-  pipes.push({ id: nextId++, side:"E", diameter:225, offset:150, angle:0, label:"Pipe "+nextId });
+  const pit = getActivePit();
+  pit.pipes.push({ id:newId(), label:"Pipe "+(pit.pipes.length+1), side:"E", diameter:225, angle:0, mode:"auto", offset:150 });
   renderPipeCards();
   renderScene();
-});
-
-["pitWidth","pitLength","wallThk","cornerClear","pitName"].forEach(id=>{
-  document.getElementById(id).addEventListener("input", renderScene);
+  scheduleSave();
 });
 
 document.getElementById("toggleBtn").addEventListener("click", ()=>{
@@ -386,126 +352,143 @@ document.getElementById("toggleBtn").addEventListener("click", ()=>{
   renderScene();
 });
 
-function checkPipe(pipe, wallLenFor){
+// ---------- Auto layout + checks ----------
+function wallLenFor(pit, side){ return (side==="N"||side==="S") ? pit.width : pit.length; }
+
+function computeAutoPositions(pit){
+  SIDES.forEach(side=>{
+    const wallLen = wallLenFor(pit, side);
+    const autoPipes = pit.pipes.filter(p=>p.side===side && p.mode==="auto");
+    const n = autoPipes.length;
+    const spacing = pit.spacing || 300;
+    const totalSpan = spacing*(n-1);
+    const start = wallLen/2 - totalSpan/2;
+    autoPipes.forEach((p,i)=>{ p._autoOffset = start + i*spacing; });
+  });
+}
+function effectiveOffset(p){ return p.mode==="auto" ? (p._autoOffset||0) : p.offset; }
+
+function checkPipe(pit, pipe){
   const issues = [];
-  const wallLen = wallLenFor(pipe.side); // internal wall length pipe sits on
+  const wallLen = wallLenFor(pit, pipe.side);
   const skewFactor = 1/Math.cos(pipe.angle*Math.PI/180);
   const footprint = pipe.diameter * Math.abs(skewFactor);
-  const clear = parseFloat(document.getElementById("cornerClear").value)||0;
+  const clear = pit.cornerClear;
+  const offset = effectiveOffset(pipe);
+  const startPos = offset - footprint/2;
+  const endPos = offset + footprint/2;
 
-  const startPos = pipe.offset - footprint/2;
-  const endPos = pipe.offset + footprint/2;
-
-  if(startPos < clear){
-    issues.push(`${pipe.label}: only ${Math.max(0,Math.round(startPos))}mm to near corner — needs ${clear}mm`);
-  }
-  if(wallLen - endPos < clear){
-    issues.push(`${pipe.label}: only ${Math.max(0,Math.round(wallLen-endPos))}mm to far corner — needs ${clear}mm`);
-  }
-  if(footprint > wallLen - 2*clear && wallLen - 2*clear > 0){
-    issues.push(`${pipe.label}: skewed footprint (${Math.round(footprint)}mm) doesn't fit between corner clearances on this wall`);
-  }
+  if(startPos < clear) issues.push(`${pipe.label}: only ${Math.max(0,Math.round(startPos))}mm to near corner — needs ${clear}mm`);
+  if(wallLen - endPos < clear) issues.push(`${pipe.label}: only ${Math.max(0,Math.round(wallLen-endPos))}mm to far corner — needs ${clear}mm`);
+  if(footprint > wallLen - 2*clear && wallLen - 2*clear > 0) issues.push(`${pipe.label}: skewed footprint (${Math.round(footprint)}mm) doesn't fit between corner clearances`);
+  if(startPos < 0 || endPos > wallLen) issues.push(`${pipe.label}: extends beyond the wall — reduce spacing or offset`);
   return issues;
 }
 
+// ---------- Render scene ----------
 function renderScene(){
-  const width = parseFloat(document.getElementById("pitWidth").value)||600;
-  const length = parseFloat(document.getElementById("pitLength").value)||600;
-  const wallThk = parseFloat(document.getElementById("wallThk").value)||75;
-  const clear = parseFloat(document.getElementById("cornerClear").value)||150;
-  const pitName = document.getElementById("pitName").value || "Pit";
+  const pit = getActivePit();
+  computeAutoPositions(pit);
 
-  const wallLenFor = side => (side==="N"||side==="S") ? width : length;
-
-  // gather issues
   let allIssues = [];
-  pipes.forEach(p => { allIssues = allIssues.concat(checkPipe(p, wallLenFor)); });
+  pit.pipes.forEach(p => { allIssues = allIssues.concat(checkPipe(pit, p)); });
 
   const banner = document.getElementById("statusBanner");
   const issueBox = document.getElementById("issueList");
   if(allIssues.length===0){
     banner.className = "status-banner pass";
-    banner.innerHTML = `<span class="status-dot"></span> ${pitName}: all pipes clear corner and wall constraints`;
+    banner.innerHTML = `<span class="status-dot"></span> ${pit.name}: all pipes clear corner and wall constraints`;
     issueBox.innerHTML = "";
   } else {
     banner.className = "status-banner fail";
-    banner.innerHTML = `<span class="status-dot"></span> ${pitName}: ${allIssues.length} clearance issue${allIssues.length>1?"s":""} found`;
+    banner.innerHTML = `<span class="status-dot"></span> ${pit.name}: ${allIssues.length} clearance issue${allIssues.length>1?"s":""} found`;
     issueBox.innerHTML = allIssues.map(i=>`<div class="issue">${i}</div>`).join("");
   }
 
-  // --- SVG top view ---
   const svg = document.getElementById("pitSvg");
   svg.innerHTML = "";
   const pad = 100;
-  const outerW = width + wallThk*2, outerL = length + wallThk*2;
+  const outerW = pit.width + pit.wallThk*2, outerL = pit.length + pit.wallThk*2;
   const vbW = outerW + pad*2, vbH = outerL + pad*2;
   svg.setAttribute("viewBox", `0 0 ${vbW} ${vbH}`);
+  const ox = pad, oy = pad, ix = ox+pit.wallThk, iy = oy+pit.wallThk;
 
-  const ox = pad, oy = pad; // outer wall top-left in svg coords
-  const ix = ox + wallThk, iy = oy + wallThk;
-
-  // outer wall
   svg.appendChild(el("rect",{x:ox,y:oy,width:outerW,height:outerL,fill:"var(--wall-fill)",stroke:"var(--wall)","stroke-width":2}));
-  // inner cavity
-  svg.appendChild(el("rect",{x:ix,y:iy,width:width,height:length,fill:"var(--paper)",stroke:"var(--wall)","stroke-width":1.5}));
-
-  // dimension labels
-  svg.appendChild(text(ox+outerW/2, oy-24, `${pitName} — internal ${width} × ${length}mm, wall ${wallThk}mm`, {size:13, fill:"var(--ink)"}));
-  svg.appendChild(text(ox+outerW/2, oy+outerL+34, `N wall = ${width}mm`, {size:11}));
-  svg.appendChild(text(-1, -1, ""));
-
-  // orientation labels
+  svg.appendChild(el("rect",{x:ix,y:iy,width:pit.width,height:pit.length,fill:"var(--paper)",stroke:"var(--wall)","stroke-width":1.5}));
+  svg.appendChild(text(ox+outerW/2, oy-24, `${pit.name} — internal ${pit.width} × ${pit.length}mm, wall ${pit.wallThk}mm`, {size:13, fill:"var(--ink)"}));
   svg.appendChild(text(ox+outerW/2, oy-6, "N", {size:12, fill:"var(--ink)"}));
   svg.appendChild(text(ox+outerW/2, oy+outerL+16, "S", {size:12, fill:"var(--ink)"}));
   svg.appendChild(text(ox-16, oy+outerL/2, "W", {size:12, fill:"var(--ink)", attrs:{"dominant-baseline":"middle"}}));
   svg.appendChild(text(ox+outerW+16, oy+outerL/2, "E", {size:12, fill:"var(--ink)", attrs:{"dominant-baseline":"middle"}}));
 
-  // pipes
-  pipes.forEach(p=>{
-    const wallLen = wallLenFor(p.side);
-    const isFail = checkPipe(p, wallLenFor).length>0;
+  pit.pipes.forEach(p=>{
+    const isFail = checkPipe(pit, p).length>0;
     const color = isFail ? "var(--pipe-fail)" : "var(--pipe)";
     const r = p.diameter/2;
-    let cx, cy, rot=0, along;
-
-    if(p.side==="N"){ along = ix+p.offset; cx=along; cy=oy+wallThk/2; rot=0; }
-    if(p.side==="S"){ along = ix+p.offset; cx=along; cy=oy+outerL-wallThk/2; rot=180; }
-    if(p.side==="W"){ along = iy+p.offset; cx=ox+wallThk/2; cy=along; rot=270; }
-    if(p.side==="E"){ along = iy+p.offset; cx=ox+outerW-wallThk/2; cy=along; rot=90; }
+    const offset = effectiveOffset(p);
+    let cx, cy, rot=0;
+    if(p.side==="N"){ cx=ix+offset; cy=oy+pit.wallThk/2; rot=0; }
+    if(p.side==="S"){ cx=ix+offset; cy=oy+outerL-pit.wallThk/2; rot=180; }
+    if(p.side==="W"){ cx=ox+pit.wallThk/2; cy=iy+offset; rot=270; }
+    if(p.side==="E"){ cx=ox+outerW-pit.wallThk/2; cy=iy+offset; rot=90; }
 
     const g = el("g",{transform:`rotate(${rot+p.angle} ${cx} ${cy})`});
-    // pipe barrel crossing the wall
-    g.appendChild(el("rect",{x:cx-r, y:cy-wallThk*1.6, width:r*2, height:wallThk*3.2, fill:color, opacity:0.28}));
+    g.appendChild(el("rect",{x:cx-r, y:cy-pit.wallThk*1.6, width:r*2, height:pit.wallThk*3.2, fill:color, opacity:0.28}));
     g.appendChild(el("circle",{cx,cy,r,fill:color, opacity:0.85, stroke:"var(--ink)","stroke-width":1}));
     svg.appendChild(g);
 
-    // label
     const lx = p.side==="W" ? cx-r-14 : p.side==="E" ? cx+r+14 : cx;
     const ly = p.side==="N" ? cy-r-10 : p.side==="S" ? cy+r+22 : cy;
     const anchor = p.side==="W" ? "end" : p.side==="E" ? "start" : "middle";
     svg.appendChild(text(lx,ly,`${p.label} ⌀${p.diameter}`,{size:11, fill:isFail?"var(--fail)":"var(--line-muted)", anchor}));
   });
 
-  // corner clearance guides (dashed) — draw small tick marks at clearance distance on each wall
   const clearColor = "#B0761F";
   SIDES.forEach(side=>{
-    const wallLen = wallLenFor(side);
+    const wallLen = wallLenFor(pit, side);
     if(side==="N"||side==="S"){
       const y = side==="N" ? oy : oy+outerL;
-      [ix+clear, ix+wallLen-clear].forEach(x=>{
-        svg.appendChild(el("line",{x1:x,y1:y-wallThk*0.6,x2:x,y2:y+wallThk*0.6,stroke:clearColor,"stroke-width":1.5,"stroke-dasharray":"3,2"}));
+      [ix+pit.cornerClear, ix+wallLen-pit.cornerClear].forEach(x=>{
+        svg.appendChild(el("line",{x1:x,y1:y-pit.wallThk*0.6,x2:x,y2:y+pit.wallThk*0.6,stroke:clearColor,"stroke-width":1.5,"stroke-dasharray":"3,2"}));
       });
     } else {
       const x = side==="W" ? ox : ox+outerW;
-      [iy+clear, iy+wallLen-clear].forEach(y=>{
-        svg.appendChild(el("line",{x1:x-wallThk*0.6,y1:y,x2:x+wallThk*0.6,y2:y,stroke:clearColor,"stroke-width":1.5,"stroke-dasharray":"3,2"}));
+      [iy+pit.cornerClear, iy+wallLen-pit.cornerClear].forEach(y=>{
+        svg.appendChild(el("line",{x1:x-pit.wallThk*0.6,y1:y,x2:x+pit.wallThk*0.6,y2:y,stroke:clearColor,"stroke-width":1.5,"stroke-dasharray":"3,2"}));
       });
     }
   });
 }
 
-renderPipeCards();
-renderScene();
+function renderAll(){
+  renderPitList();
+  renderPitSettings();
+  renderPipeCards();
+  renderScene();
+}
+
+document.getElementById("projectName").addEventListener("input", e=>{
+  state.projectName = e.target.value;
+  scheduleSave();
+});
+
+// ---------- Boot ----------
+(async function boot(){
+  try{
+    db = await openDB();
+    const saved = await loadState();
+    if(saved && saved.pits && saved.pits.length){
+      state = saved;
+      const maxId = Math.max(1, ...state.pits.flatMap(p=>[p.id, ...p.pipes.map(pp=>pp.id)]));
+      idCounter = maxId+1;
+      document.getElementById("projectName").value = state.projectName || "Project 01";
+    }
+  }catch(err){
+    console.error("IndexedDB unavailable, running without persistence", err);
+    document.getElementById("saveNote").textContent = "Local saving unavailable in this browser";
+  }
+  renderAll();
+})();
 </script>
 </body>
 </html>
