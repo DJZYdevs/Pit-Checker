@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pit Checker — Prototype</title>
+<style>
+  :root{
+    --paper:#EEF2F1;
+    --grid:#DCE4E2;
+    --ink:#16232E;
+    --wall:#16232E;
+    --wall-fill:#C7D0CC;
+    --pipe:#4C7A92;
+    --pipe-fail:#B54834;
+    --pass:#3C7A5C;
+    --fail:#B54834;
+    --panel-bg:#FFFFFF;
+    --accent:#C77A34;
+    --line-muted:#5C6B67;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    overflow-x:hidden;
+    width:100%;
+  }
+  body{
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+  .app{
+    display:flex;
+    flex-direction:column;
+    min-height:100vh;
+    min-height:100dvh;
+  }
+  header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding:12px 14px;
+    background:var(--ink);
+    color:#EEF2F1;
+    flex-wrap:wrap;
+  }
+  header .title{
+    font-size:15px;
+    letter-spacing:0.02em;
+    min-width:0;
+  }
+  header .title b{ font-weight:700; }
+  header .title span{
+    display:block;
+    font-size:11px;
+    color:#9DB0A8;
+    margin-top:2px;
+  }
+  #toggleBtn{
+    background:transparent;
+    border:1px solid #4C5B54;
+    color:#EEF2F1;
+    padding:7px 12px;
+    border-radius:3px;
+    font-size:12.5px;
+    cursor:pointer;
+  }
+  #toggleBtn:hover{ background:#243141; }
+
+  .body-row{
+    display:flex;
+    flex:1;
+    min-height:0;
+    width:100%;
+  }
+  .panel{
+    width:320px;
+    max-width:85vw;
+    flex-shrink:0;
+    background:var(--panel-bg);
+    border-right:1px solid var(--grid);
+    padding:16px;
+    overflow-y:auto;
+    max-height: calc(100vh - 54px);
+    max-height: calc(100dvh - 54px);
+    transition: margin-left 0.18s ease, opacity 0.18s ease;
+  }
+  .panel.hidden{
+    margin-left:-320px;
+    opacity:0;
+    pointer-events:none;
+  }
+  .field{ margin-bottom:12px; }
+  .field label{
+    display:block;
+    font-size:11px;
+    color:var(--line-muted);
+    margin-bottom:4px;
+    letter-spacing:0.01em;
+  }
+  .field input, .field select{
+    width:100%;
+    padding:8px;
+    border:1px solid #C7D0CC;
+    border-radius:3px;
+    font-size:16px;
+    background:#FBFCFB;
+    color:var(--ink);
+  }
+  .pipe-card input[type="text"]{ font-size:16px; }
+  .field-row{
+    display:flex;
+    gap:8px;
+  }
+  .field-row .field{ flex:1; }
+  .section-label{
+    font-size:12px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    color:var(--ink);
+    border-bottom:2px solid var(--ink);
+    padding-bottom:5px;
+    margin:18px 0 12px;
+  }
+  .section-label:first-child{ margin-top:0; }
+
+  .pipe-card{
+    border:1px solid var(--grid);
+    border-radius:4px;
+    padding:10px;
+    margin-bottom:10px;
+    background:#F7F9F8;
+    position:relative;
+  }
+  .pipe-card .pipe-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:8px;
+  }
+  .pipe-card .pipe-head b{ font-size:12.5px; }
+  .remove-btn{
+    background:none;
+    border:none;
+    color:var(--fail);
+    font-size:12px;
+    cursor:pointer;
+    padding:2px 6px;
+  }
+  .add-btn{
+    width:100%;
+    padding:9px;
+    background:var(--ink);
+    color:#EEF2F1;
+    border:none;
+    border-radius:3px;
+    font-size:12.5px;
+    cursor:pointer;
+    margin-top:4px;
+  }
+  .add-btn:hover{ background:#243141; }
+
+  .canvas-wrap{
+    flex:1;
+    min-width:0;
+    display:flex;
+    flex-direction:column;
+    padding:18px;
+  }
+  .status-banner{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:10px 14px;
+    border-radius:4px;
+    font-size:13px;
+    margin-bottom:14px;
+    font-weight:600;
+  }
+  .status-banner.pass{ background:#E4F0E8; color:var(--pass); border:1px solid #BEDBC8; }
+  .status-banner.fail{ background:#F5E5DF; color:var(--fail); border:1px solid #E5BEAF; }
+  .status-dot{
+    width:9px; height:9px; border-radius:50%;
+    background:currentColor;
+    flex-shrink:0;
+  }
+
+  .svg-frame{
+    flex:1;
+    min-height:400px;
+    background:#FBFCFB;
+    border:1px solid var(--grid);
+    border-radius:4px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  svg{ width:100%; height:100%; }
+
+  .issue-list{
+    margin-top:12px;
+    font-size:12.5px;
+  }
+  .issue-list .issue{
+    padding:7px 10px;
+    border-left:3px solid var(--fail);
+    background:#F5E5DF;
+    margin-bottom:6px;
+    border-radius:0 3px 3px 0;
+    color:#7A3521;
+  }
+
+  @media (max-width: 760px){
+    .body-row{ position:relative; }
+    .panel{
+      position:fixed;
+      z-index:5;
+      top:0; left:0;
+      bottom:0;
+      width:85vw;
+      max-width:320px;
+      max-height:none;
+      padding-top:66px;
+      box-shadow:2px 0 12px rgba(0,0,0,0.15);
+    }
+    .panel.hidden{ margin-left:-85vw; }
+    .canvas-wrap{ padding:12px; }
+    .svg-frame{ min-height:280px; }
+    header{ padding:10px 12px; }
+    header .title span{ font-size:10.5px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="title"><b>Pit Checker</b><span>Prototype — top view · pipe fit &amp; clearance</span></div>
+    <button id="toggleBtn">Hide inputs</button>
+  </header>
+
+  <div class="body-row">
+    <div class="panel" id="panel">
+      <div class="section-label">Pit</div>
+      <div class="field">
+        <label>Pit name</label>
+        <input id="pitName" type="text" value="Pit 01">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Internal width (mm) — E/W</label>
+          <input id="pitWidth" type="number" value="600" step="10">
+        </div>
+        <div class="field">
+          <label>Internal length (mm) — N/S</label>
+          <input id="pitLength" type="number" value="600" step="10">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Wall thickness (mm)</label>
+          <input id="wallThk" type="number" value="75" step="5">
+        </div>
+        <div class="field">
+          <label>Min corner clearance (mm)</label>
+          <input id="cornerClear" type="number" value="150" step="10">
+        </div>
+      </div>
+
+      <div class="section-label">Pipes</div>
+      <div id="pipeList"></div>
+      <button class="add-btn" id="addPipeBtn">+ Add pipe</button>
+    </div>
+
+    <div class="canvas-wrap">
+      <div class="status-banner" id="statusBanner"></div>
+      <div class="svg-frame">
+        <svg id="pitSvg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div class="issue-list" id="issueList"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SIDES = ["N","E","S","W"];
+let pipes = [
+  { id:1, side:"N", diameter:300, offset:150, angle:0, label:"Inlet 1" },
+  { id:2, side:"S", diameter:375, offset:150, angle:0, label:"Outlet" }
+];
+let nextId = 3;
+
+function el(tag, attrs, children){
+  const e = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for(const k in attrs) e.setAttribute(k, attrs[k]);
+  if(children) children.forEach(c => e.appendChild(c));
+  return e;
+}
+function text(x,y,str,opts={}){
+  const t = el("text", Object.assign({x,y,"font-size":opts.size||13,fill:opts.fill||"var(--line-muted)","font-family":"'Segoe UI',sans-serif","text-anchor":opts.anchor||"middle"},opts.attrs||{}));
+  t.textContent = str;
+  return t;
+}
+
+function renderPipeCards(){
+  const list = document.getElementById("pipeList");
+  list.innerHTML = "";
+  pipes.forEach(p => {
+    const card = document.createElement("div");
+    card.className = "pipe-card";
+    card.innerHTML = `
+      <div class="pipe-head">
+        <b>${p.label}</b>
+        <button class="remove-btn" data-id="${p.id}">Remove</button>
+      </div>
+      <div class="field">
+        <label>Label</label>
+        <input type="text" data-field="label" data-id="${p.id}" value="${p.label}">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Wall</label>
+          <select data-field="side" data-id="${p.id}">
+            ${SIDES.map(s=>`<option value="${s}" ${s===p.side?"selected":""}>${s}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field">
+          <label>OD (mm)</label>
+          <input type="number" data-field="diameter" data-id="${p.id}" value="${p.diameter}" step="15">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Offset from left corner (mm)</label>
+          <input type="number" data-field="offset" data-id="${p.id}" value="${p.offset}" step="10">
+        </div>
+        <div class="field">
+          <label>Skew angle (° from perp.)</label>
+          <input type="number" data-field="angle" data-id="${p.id}" value="${p.angle}" step="5" min="-60" max="60">
+        </div>
+      </div>
+    `;
+    list.appendChild(card);
+  });
+
+  list.querySelectorAll("input,select").forEach(inp=>{
+    inp.addEventListener("input", e=>{
+      const id = parseInt(e.target.dataset.id);
+      const field = e.target.dataset.field;
+      const pipe = pipes.find(p=>p.id===id);
+      if(!pipe) return;
+      pipe[field] = (field==="label"||field==="side") ? e.target.value : parseFloat(e.target.value)||0;
+      renderScene();
+    });
+  });
+  list.querySelectorAll(".remove-btn").forEach(btn=>{
+    btn.addEventListener("click", e=>{
+      const id = parseInt(e.target.dataset.id);
+      pipes = pipes.filter(p=>p.id!==id);
+      renderPipeCards();
+      renderScene();
+    });
+  });
+}
+
+document.getElementById("addPipeBtn").addEventListener("click", ()=>{
+  pipes.push({ id: nextId++, side:"E", diameter:225, offset:150, angle:0, label:"Pipe "+nextId });
+  renderPipeCards();
+  renderScene();
+});
+
+["pitWidth","pitLength","wallThk","cornerClear","pitName"].forEach(id=>{
+  document.getElementById(id).addEventListener("input", renderScene);
+});
+
+document.getElementById("toggleBtn").addEventListener("click", ()=>{
+  const panel = document.getElementById("panel");
+  panel.classList.toggle("hidden");
+  document.getElementById("toggleBtn").textContent = panel.classList.contains("hidden") ? "Show inputs" : "Hide inputs";
+  renderScene();
+});
+
+function checkPipe(pipe, wallLenFor){
+  const issues = [];
+  const wallLen = wallLenFor(pipe.side); // internal wall length pipe sits on
+  const skewFactor = 1/Math.cos(pipe.angle*Math.PI/180);
+  const footprint = pipe.diameter * Math.abs(skewFactor);
+  const clear = parseFloat(document.getElementById("cornerClear").value)||0;
+
+  const startPos = pipe.offset - footprint/2;
+  const endPos = pipe.offset + footprint/2;
+
+  if(startPos < clear){
+    issues.push(`${pipe.label}: only ${Math.max(0,Math.round(startPos))}mm to near corner — needs ${clear}mm`);
+  }
+  if(wallLen - endPos < clear){
+    issues.push(`${pipe.label}: only ${Math.max(0,Math.round(wallLen-endPos))}mm to far corner — needs ${clear}mm`);
+  }
+  if(footprint > wallLen - 2*clear && wallLen - 2*clear > 0){
+    issues.push(`${pipe.label}: skewed footprint (${Math.round(footprint)}mm) doesn't fit between corner clearances on this wall`);
+  }
+  return issues;
+}
+
+function renderScene(){
+  const width = parseFloat(document.getElementById("pitWidth").value)||600;
+  const length = parseFloat(document.getElementById("pitLength").value)||600;
+  const wallThk = parseFloat(document.getElementById("wallThk").value)||75;
+  const clear = parseFloat(document.getElementById("cornerClear").value)||150;
+  const pitName = document.getElementById("pitName").value || "Pit";
+
+  const wallLenFor = side => (side==="N"||side==="S") ? width : length;
+
+  // gather issues
+  let allIssues = [];
+  pipes.forEach(p => { allIssues = allIssues.concat(checkPipe(p, wallLenFor)); });
+
+  const banner = document.getElementById("statusBanner");
+  const issueBox = document.getElementById("issueList");
+  if(allIssues.length===0){
+    banner.className = "status-banner pass";
+    banner.innerHTML = `<span class="status-dot"></span> ${pitName}: all pipes clear corner and wall constraints`;
+    issueBox.innerHTML = "";
+  } else {
+    banner.className = "status-banner fail";
+    banner.innerHTML = `<span class="status-dot"></span> ${pitName}: ${allIssues.length} clearance issue${allIssues.length>1?"s":""} found`;
+    issueBox.innerHTML = allIssues.map(i=>`<div class="issue">${i}</div>`).join("");
+  }
+
+  // --- SVG top view ---
+  const svg = document.getElementById("pitSvg");
+  svg.innerHTML = "";
+  const pad = 100;
+  const outerW = width + wallThk*2, outerL = length + wallThk*2;
+  const vbW = outerW + pad*2, vbH = outerL + pad*2;
+  svg.setAttribute("viewBox", `0 0 ${vbW} ${vbH}`);
+
+  const ox = pad, oy = pad; // outer wall top-left in svg coords
+  const ix = ox + wallThk, iy = oy + wallThk;
+
+  // outer wall
+  svg.appendChild(el("rect",{x:ox,y:oy,width:outerW,height:outerL,fill:"var(--wall-fill)",stroke:"var(--wall)","stroke-width":2}));
+  // inner cavity
+  svg.appendChild(el("rect",{x:ix,y:iy,width:width,height:length,fill:"var(--paper)",stroke:"var(--wall)","stroke-width":1.5}));
+
+  // dimension labels
+  svg.appendChild(text(ox+outerW/2, oy-24, `${pitName} — internal ${width} × ${length}mm, wall ${wallThk}mm`, {size:13, fill:"var(--ink)"}));
+  svg.appendChild(text(ox+outerW/2, oy+outerL+34, `N wall = ${width}mm`, {size:11}));
+  svg.appendChild(text(-1, -1, ""));
+
+  // orientation labels
+  svg.appendChild(text(ox+outerW/2, oy-6, "N", {size:12, fill:"var(--ink)"}));
+  svg.appendChild(text(ox+outerW/2, oy+outerL+16, "S", {size:12, fill:"var(--ink)"}));
+  svg.appendChild(text(ox-16, oy+outerL/2, "W", {size:12, fill:"var(--ink)", attrs:{"dominant-baseline":"middle"}}));
+  svg.appendChild(text(ox+outerW+16, oy+outerL/2, "E", {size:12, fill:"var(--ink)", attrs:{"dominant-baseline":"middle"}}));
+
+  // pipes
+  pipes.forEach(p=>{
+    const wallLen = wallLenFor(p.side);
+    const isFail = checkPipe(p, wallLenFor).length>0;
+    const color = isFail ? "var(--pipe-fail)" : "var(--pipe)";
+    const r = p.diameter/2;
+    let cx, cy, rot=0, along;
+
+    if(p.side==="N"){ along = ix+p.offset; cx=along; cy=oy+wallThk/2; rot=0; }
+    if(p.side==="S"){ along = ix+p.offset; cx=along; cy=oy+outerL-wallThk/2; rot=180; }
+    if(p.side==="W"){ along = iy+p.offset; cx=ox+wallThk/2; cy=along; rot=270; }
+    if(p.side==="E"){ along = iy+p.offset; cx=ox+outerW-wallThk/2; cy=along; rot=90; }
+
+    const g = el("g",{transform:`rotate(${rot+p.angle} ${cx} ${cy})`});
+    // pipe barrel crossing the wall
+    g.appendChild(el("rect",{x:cx-r, y:cy-wallThk*1.6, width:r*2, height:wallThk*3.2, fill:color, opacity:0.28}));
+    g.appendChild(el("circle",{cx,cy,r,fill:color, opacity:0.85, stroke:"var(--ink)","stroke-width":1}));
+    svg.appendChild(g);
+
+    // label
+    const lx = p.side==="W" ? cx-r-14 : p.side==="E" ? cx+r+14 : cx;
+    const ly = p.side==="N" ? cy-r-10 : p.side==="S" ? cy+r+22 : cy;
+    const anchor = p.side==="W" ? "end" : p.side==="E" ? "start" : "middle";
+    svg.appendChild(text(lx,ly,`${p.label} ⌀${p.diameter}`,{size:11, fill:isFail?"var(--fail)":"var(--line-muted)", anchor}));
+  });
+
+  // corner clearance guides (dashed) — draw small tick marks at clearance distance on each wall
+  const clearColor = "#B0761F";
+  SIDES.forEach(side=>{
+    const wallLen = wallLenFor(side);
+    if(side==="N"||side==="S"){
+      const y = side==="N" ? oy : oy+outerL;
+      [ix+clear, ix+wallLen-clear].forEach(x=>{
+        svg.appendChild(el("line",{x1:x,y1:y-wallThk*0.6,x2:x,y2:y+wallThk*0.6,stroke:clearColor,"stroke-width":1.5,"stroke-dasharray":"3,2"}));
+      });
+    } else {
+      const x = side==="W" ? ox : ox+outerW;
+      [iy+clear, iy+wallLen-clear].forEach(y=>{
+        svg.appendChild(el("line",{x1:x-wallThk*0.6,y1:y,x2:x+wallThk*0.6,y2:y,stroke:clearColor,"stroke-width":1.5,"stroke-dasharray":"3,2"}));
+      });
+    }
+  });
+}
+
+renderPipeCards();
+renderScene();
+</script>
+</body>
+</html>
