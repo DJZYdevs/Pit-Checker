@@ -12,8 +12,14 @@
         label size control, click-to-filter selection
   v0.4  Versioning + in-file changelog, multi-pipe groups per wall (equal size/skew for now),
         group centring from wall centre with manual override, pinch/scroll zoom with
-        screen-constant dynamic label sizing, plan-view pipe symbol (no circles in top view —
-        circles reserved for future elevation views), TOP VIEW title, outlet label clipping fix
+        screen-constant dynamic label sizing, plan-view pipe symbol (no circles in top view),
+        TOP VIEW title, outlet label clipping fix
+  v0.5  North-arrow overlay (top-left, screen-fixed) replacing cluttered N/E/S/W text labels;
+        dashed diagonal setout cross for closed-cover pits; pipe spacing now measured
+        edge-to-edge (outer diameter to outer diameter) instead of centre-to-centre; top view
+        simplified to outer diameter only (no inner diameter line); pipes now extend to the
+        pit's inner wall and 500mm outside the pit for clearer skew/corner checking; pit cover
+        type (closed / grated) with default 600x600 grate, auto-haunched if the pit is larger
 -->
 <style>
   :root{
@@ -80,8 +86,9 @@
   .status-banner.pass{ background:#E4F0E8; color:var(--pass); border:1px solid #BEDBC8; }
   .status-banner.fail{ background:#F5E5DF; color:var(--fail); border:1px solid #E5BEAF; }
   .status-dot{ width:9px; height:9px; border-radius:50%; background:currentColor; flex-shrink:0; }
-  .svg-frame{ flex:1; min-height:400px; background:#FBFCFB; border:1px solid var(--grid); border-radius:4px; display:flex; align-items:center; justify-content:center; touch-action:none; overflow:hidden; }
+  .svg-frame{ flex:1; min-height:400px; background:#FBFCFB; border:1px solid var(--grid); border-radius:4px; display:flex; align-items:center; justify-content:center; touch-action:none; overflow:hidden; position:relative; }
   svg{ width:100%; height:100%; }
+  .north-arrow{ position:absolute; top:10px; left:10px; width:clamp(30px,8vw,46px); height:clamp(30px,8vw,46px); z-index:2; pointer-events:none; filter:drop-shadow(0 1px 1px rgba(0,0,0,0.15)); }
   .issue-list{ margin-top:12px; font-size:12.5px; }
   .issue-list .issue{ padding:7px 10px; border-left:3px solid var(--fail); background:#F5E5DF; margin-bottom:6px; border-radius:0 3px 3px 0; color:#7A3521; }
   .save-note{ font-size:10.5px; color:var(--line-muted); text-align:center; margin-top:14px; }
@@ -98,7 +105,7 @@
 <body>
 <div class="app">
   <header>
-    <div class="title"><b>Pit Checker</b><span id="versionLabel">v0.4 · Top view · pipe fit &amp; clearance</span></div>
+    <div class="title"><b>Pit Checker</b><span id="versionLabel">v0.5 · Top view · pipe fit &amp; clearance</span></div>
     <button id="toggleBtn">Hide inputs</button>
   </header>
   <div class="body-row">
@@ -125,10 +132,22 @@
         <div class="field"><label>Min corner clearance (mm)</label><input id="cornerClear" type="number" step="10"></div>
       </div>
       <div class="field-row">
-        <div class="field"><label>Default pipe spacing, c/c (mm)</label><input id="pipeSpacing" type="number" step="10"></div>
+        <div class="field"><label>Default clear spacing between pipes (mm)</label><input id="pipeSpacing" type="number" step="10"></div>
         <div class="field"><label>Default pipe wall thk (mm)</label><input id="defaultPipeWT" type="number" step="1"></div>
       </div>
       <div class="subnote">Default spacing is a placeholder — confirm the exact figure against the current VicRoads/DTP standard drawing for your project before relying on it.</div>
+
+      <div class="field">
+        <label>Pit cover</label>
+        <select id="coverType">
+          <option value="closed">Closed cover</option>
+          <option value="grated">Grated (open) cover</option>
+        </select>
+      </div>
+      <div class="field-row" id="grateFields">
+        <div class="field"><label>Grate width (mm)</label><input id="grateW" type="number" step="10"></div>
+        <div class="field"><label>Grate length (mm)</label><input id="grateH" type="number" step="10"></div>
+      </div>
 
       <div class="section-label">Pipes <span id="pipeCountLabel" style="font-weight:400;font-size:11px;"></span></div>
       <div id="filterChipWrap"></div>
@@ -147,7 +166,14 @@
           <button id="zoomIn" title="Zoom in">+</button>
         </span>
       </div>
-      <div class="svg-frame" id="svgFrame"><svg id="pitSvg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet"></svg></div>
+      <div class="svg-frame" id="svgFrame">
+        <svg id="pitSvg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet"></svg>
+        <svg class="north-arrow" viewBox="0 0 40 40">
+          <circle cx="20" cy="20" r="18" fill="#FBFCFB" stroke="#16232E" stroke-width="1.5"/>
+          <polygon points="20,5 25.5,25 20,20.5 14.5,25" fill="#16232E"/>
+          <text x="20" y="34.5" font-size="9.5" text-anchor="middle" fill="#16232E" font-weight="700">N</text>
+        </svg>
+      </div>
       <div class="issue-list" id="issueList"></div>
     </div>
   </div>
@@ -163,13 +189,13 @@ let lastVB = null, lastFitVB = null;
 
 function defaultPit(name){
   return {
-    id:newId(), name:name||"Pit 01", width:600, length:600, wallThk:75, cornerClear:150, spacing:300,
-    defaultPipeWT:20,
+    id:newId(), name:name||"Pit 01", width:600, length:600, wallThk:75, cornerClear:150, spacing:150,
+    defaultPipeWT:20, coverType:"closed", grateW:600, grateH:600,
     pipes:[
       { id:newId(), label:"Inlet 1", side:"N", diameter:300, angle:0, mode:"auto", offset:0, type:"inlet",
-        flowReversed:false, wtMode:"default", wallThk:20, collapsed:true, multi:false, count:2, spacingMode:"default", spacing:300 },
+        flowReversed:false, wtMode:"default", wallThk:20, collapsed:true, multi:false, count:2, spacingMode:"default", spacing:150 },
       { id:newId(), label:"Outlet", side:"S", diameter:375, angle:0, mode:"auto", offset:0, type:"outlet",
-        flowReversed:false, wtMode:"default", wallThk:20, collapsed:true, multi:false, count:2, spacingMode:"default", spacing:300 }
+        flowReversed:false, wtMode:"default", wallThk:20, collapsed:true, multi:false, count:2, spacingMode:"default", spacing:150 }
     ]
   };
 }
@@ -282,15 +308,21 @@ function renderPitSettings(){
   document.getElementById("cornerClear").value = pit.cornerClear;
   document.getElementById("pipeSpacing").value = pit.spacing;
   document.getElementById("defaultPipeWT").value = pit.defaultPipeWT;
+  document.getElementById("coverType").value = pit.coverType;
+  document.getElementById("grateW").value = pit.grateW;
+  document.getElementById("grateH").value = pit.grateH;
+  document.getElementById("grateFields").style.display = pit.coverType==="grated" ? "flex" : "none";
 }
 [["pitName","name",false],["pitWidth","width",true],["pitLength","length",true],
  ["wallThk","wallThk",true],["cornerClear","cornerClear",true],["pipeSpacing","spacing",true],
- ["defaultPipeWT","defaultPipeWT",true]
+ ["defaultPipeWT","defaultPipeWT",true],["coverType","coverType",false],
+ ["grateW","grateW",true],["grateH","grateH",true]
 ].forEach(([elId,field,isNum])=>{
   document.getElementById(elId).addEventListener("input", e=>{
     const pit = getActivePit();
     pit[field] = isNum ? (parseFloat(e.target.value)||0) : e.target.value;
     if(field==="name") renderPitList();
+    if(field==="coverType") document.getElementById("grateFields").style.display = pit.coverType==="grated" ? "flex" : "none";
     renderScene(); scheduleSave();
   });
 });
@@ -330,11 +362,11 @@ function renderPipeCards(){
         </div>
         <div class="checkbox-row">
           <input type="checkbox" id="spc-${p.id}" data-field="spacingMode" data-id="${p.id}" ${p.spacingMode==="manual"?"checked":""}>
-          <label for="spc-${p.id}" style="margin:0;">Override spacing within this group</label>
+          <label for="spc-${p.id}" style="margin:0;">Override clear spacing within this group</label>
         </div>
         ${p.spacingMode==="manual"
-          ? `<div class="field"><label>Spacing, centre-to-centre (mm)</label><input type="number" data-field="spacing" data-id="${p.id}" value="${p.spacing||pit.spacing}" step="10"></div>`
-          : `<div class="auto-offset-display">Using default spacing: ${pit.spacing}mm</div>`}
+          ? `<div class="field"><label>Clear spacing, OD to OD (mm)</label><input type="number" data-field="spacing" data-id="${p.id}" value="${p.spacing||pit.spacing}" step="10"></div>`
+          : `<div class="auto-offset-display">Using default clear spacing: ${pit.spacing}mm</div>`}
         <div class="subnote">All pipes in this group currently share size &amp; skew — per-pipe sizing is planned for later.</div>
       ` : "";
     card.innerHTML = `
@@ -502,8 +534,7 @@ svgFrameEl.addEventListener("touchmove", e=>{
   if(e.touches.length===2 && pinchStartDist){
     e.preventDefault();
     const d = touchDist(e.touches[0],e.touches[1]);
-    const factor = (d/pinchStartDist);
-    const targetScale = clampZ(pinchStartScale*factor);
+    const targetScale = clampZ(pinchStartScale*(d/pinchStartDist));
     applyZoom(targetScale/zoomScale, pinchMid.x, pinchMid.y);
   }
 },{passive:false});
@@ -517,48 +548,45 @@ document.getElementById("zoomOut").addEventListener("click", ()=>{
 });
 document.getElementById("zoomReset").addEventListener("click", ()=>{ resetView(); renderScene(); });
 
-// ---------- Layout: groups, auto positions, checks ----------
+// ---------- Layout: groups (edge-to-edge spacing), auto positions, checks ----------
 function wallLenFor(pit, side){ return (side==="N"||side==="S") ? pit.width : pit.length; }
 
 function computeAutoPositions(pit){
   SIDES.forEach(side=>{
     const wallLen = wallLenFor(pit, side);
     const entries = pit.pipes.filter(p=>p.side===side);
-    const spacingDefault = pit.spacing || 300;
+    const gapDefault = pit.spacing || 150;
     entries.forEach(p=>{
       const n = p.multi ? Math.max(2, p.count||2) : 1;
-      const sp = (p.multi && p.spacingMode==="manual") ? (p.spacing||spacingDefault) : spacingDefault;
-      p._internalSpan = sp*(n-1);
-      p._groupSpacingUsed = sp;
+      const g = (p.multi && p.spacingMode==="manual") ? (p.spacing||gapDefault) : gapDefault;
+      const d = p.diameter;
+      p._groupGapUsed = g;
+      p._internalSpan = n*d + (n-1)*g; // OD-edge to OD-edge extent of the whole group
     });
     const autoEntries = entries.filter(p=>p.mode==="auto");
-    const gap = spacingDefault;
-    const totalBlockSpan = autoEntries.reduce((s,p)=>s+p._internalSpan,0) + gap*Math.max(0,autoEntries.length-1);
+    const blockGap = gapDefault;
+    const totalBlockSpan = autoEntries.reduce((s,p)=>s+p._internalSpan,0) + blockGap*Math.max(0,autoEntries.length-1);
     let cursor = wallLen/2 - totalBlockSpan/2;
     autoEntries.forEach(p=>{
-      const centroid = cursor + p._internalSpan/2;
-      p._autoOffsetFromCorner = centroid;
-      p._autoOffsetFromCentre = centroid - wallLen/2;
-      cursor += p._internalSpan + gap;
+      p._blockStart = cursor;
+      p._autoOffsetFromCentre = (cursor + p._internalSpan/2) - wallLen/2;
+      cursor += p._internalSpan + blockGap;
     });
   });
 }
-function centroidFromCorner(pit,p){
-  if(p.mode==="auto") return p._autoOffsetFromCorner;
-  return wallLenFor(pit,p.side)/2 + p.offset;
+function blockStart(pit,p){
+  if(p.mode==="auto") return p._blockStart;
+  return wallLenFor(pit,p.side)/2 + p.offset - p._internalSpan/2;
 }
 function expandGroup(pit,p){
-  const centroid = centroidFromCorner(pit,p);
+  const start = blockStart(pit,p);
   const n = p.multi ? Math.max(2,p.count||2) : 1;
-  const sp = p._groupSpacingUsed || pit.spacing || 300;
-  const start = centroid - sp*(n-1)/2;
+  const d = p.diameter, g = p._groupGapUsed || pit.spacing || 150;
   const out=[];
   for(let i=0;i<n;i++){
-    out.push({
-      parentId:p.id, side:p.side, diameter:p.diameter, angle:p.angle, type:p.type, flowReversed:p.flowReversed,
-      wt:pipeWT(pit,p), offsetFromCorner:start+i*sp,
-      label: n>1 ? `${p.label} #${i+1}` : p.label
-    });
+    const centerFromCorner = start + d/2 + i*(d+g);
+    out.push({ parentId:p.id, side:p.side, diameter:d, angle:p.angle, type:p.type, flowReversed:p.flowReversed,
+      wt:pipeWT(pit,p), offsetFromCorner:centerFromCorner, label: n>1?`${p.label} #${i+1}`:p.label });
   }
   return out;
 }
@@ -642,7 +670,8 @@ function renderScene(){
 
   const svg = document.getElementById("pitSvg");
   svg.innerHTML = "";
-  const pad = 175;
+  const EXT_STUB = 500; // mm outside pit
+  const pad = EXT_STUB + 220;
   const outerW = pit.width + pit.wallThk*2, outerL = pit.length + pit.wallThk*2;
   const fitW = outerW + pad*2, fitH = outerL + pad*2;
   lastFitVB = {w:fitW, h:fitH};
@@ -657,29 +686,53 @@ function renderScene(){
   outerRect.addEventListener("click", ()=>{ selectedPipeId=null; renderPipeCards(); document.getElementById("panel").classList.remove("hidden"); document.getElementById("toggleBtn").textContent="Hide inputs"; });
   svg.appendChild(outerRect);
   svg.appendChild(el("rect",{x:ix,y:iy,width:pit.width,height:pit.length,fill:"var(--paper)",stroke:"var(--wall)","stroke-width":1.5}));
-  svg.appendChild(text(ox+outerW/2, oy-64, 13, `${pit.name} — internal ${pit.width} × ${pit.length}mm, wall ${pit.wallThk}mm`, {fill:"var(--ink)", weight:"700"}));
-  svg.appendChild(text(ox+outerW/2, oy-92, 15, "N", {fill:"var(--ink)", weight:"700"}));
-  svg.appendChild(text(ox+outerW/2, oy+outerL+92, 15, "S", {fill:"var(--ink)", weight:"700"}));
-  svg.appendChild(text(ox-95, oy+outerL/2, 15, "W", {fill:"var(--ink)", weight:"700", attrs:{"dominant-baseline":"middle"}}));
-  svg.appendChild(text(ox+outerW+95, oy+outerL/2, 15, "E", {fill:"var(--ink)", weight:"700", attrs:{"dominant-baseline":"middle"}}));
+  svg.appendChild(text(ox+outerW/2, oy-24, 13, `${pit.name} — internal ${pit.width} × ${pit.length}mm, wall ${pit.wallThk}mm`, {fill:"var(--ink)", weight:"700"}));
 
-  dimHorizontal(svg, oy-30, buildWallPoints(pit,"N",instances).map(v=>ix+v), -1);
-  dimHorizontal(svg, oy+outerL+30, buildWallPoints(pit,"S",instances).map(v=>ix+v), 1);
-  dimVertical(svg, ox-30, buildWallPoints(pit,"W",instances).map(v=>iy+v), -1);
-  dimVertical(svg, ox+outerW+30, buildWallPoints(pit,"E",instances).map(v=>iy+v), 1);
+  // setout cross for closed-cover pits (matches reference drawing convention)
+  if(pit.coverType==="closed"){
+    svg.appendChild(el("line",{x1:ix,y1:iy,x2:ix+pit.width,y2:iy+pit.length,stroke:"var(--line-muted)","stroke-width":0.75,"stroke-dasharray":"5,4",opacity:0.55}));
+    svg.appendChild(el("line",{x1:ix+pit.width,y1:iy,x2:ix,y2:iy+pit.length,stroke:"var(--line-muted)","stroke-width":0.75,"stroke-dasharray":"5,4",opacity:0.55}));
+  } else {
+    const gw = pit.grateW||600, gh = pit.grateH||600;
+    const coverW = Math.min(gw, pit.width), coverH = Math.min(gh, pit.length);
+    const haunched = coverW < pit.width || coverH < pit.length;
+    const gx = ix + (pit.width-coverW)/2, gy = iy + (pit.length-coverH)/2;
+    if(haunched){
+      const pc = [[ix,iy],[ix+pit.width,iy],[ix+pit.width,iy+pit.length],[ix,iy+pit.length]];
+      const gc = [[gx,gy],[gx+coverW,gy],[gx+coverW,gy+coverH],[gx,gy+coverH]];
+      pc.forEach((c,i)=>{
+        svg.appendChild(el("line",{x1:c[0],y1:c[1],x2:gc[i][0],y2:gc[i][1],stroke:"var(--line-muted)","stroke-width":1,"stroke-dasharray":"4,3"}));
+      });
+      svg.appendChild(text(ix+pit.width/2, gy-10, 10.5, `HAUNCHED TO ${coverW}×${coverH}`, {fill:"var(--line-muted)"}));
+    }
+    svg.appendChild(el("rect",{x:gx,y:gy,width:coverW,height:coverH, fill:"none", stroke:"var(--ink)","stroke-width":1.6}));
+    const hatchGap=40;
+    for(let hx=gx+hatchGap/2; hx<gx+coverW; hx+=hatchGap){
+      svg.appendChild(el("line",{x1:hx,y1:gy,x2:hx,y2:gy+coverH,stroke:"var(--line-muted)","stroke-width":0.75}));
+    }
+  }
+
+  const hasPipesOn = side => pit.pipes.some(p=>p.side===side);
+  const dimGap = side => hasPipesOn(side) ? (pit.wallThk/2 + EXT_STUB + 40) : 30;
+  dimHorizontal(svg, oy-dimGap("N"), buildWallPoints(pit,"N",instances).map(v=>ix+v), -1);
+  dimHorizontal(svg, oy+outerL+dimGap("S"), buildWallPoints(pit,"S",instances).map(v=>ix+v), 1);
+  dimVertical(svg, ox-dimGap("W"), buildWallPoints(pit,"W",instances).map(v=>iy+v), -1);
+  dimVertical(svg, ox+outerW+dimGap("E"), buildWallPoints(pit,"E",instances).map(v=>iy+v), 1);
 
   instances.forEach(inst=>{
     const isFail = checkInstance(pit, inst).length>0;
     const color = isFail ? "var(--pipe-fail)" : "var(--pipe)";
     const rOD = inst.diameter/2;
-    const rID = Math.max(2, inst.diameter/2 - inst.wt);
     let cx, cy, rot=0;
     if(inst.side==="N"){ cx=ix+inst.offsetFromCorner; cy=oy+pit.wallThk/2; rot=0; }
     if(inst.side==="S"){ cx=ix+inst.offsetFromCorner; cy=oy+outerL-pit.wallThk/2; rot=180; }
     if(inst.side==="W"){ cx=ox+pit.wallThk/2; cy=iy+inst.offsetFromCorner; rot=270; }
     if(inst.side==="E"){ cx=ox+outerW-pit.wallThk/2; cy=iy+inst.offsetFromCorner; rot=90; }
 
-    const barrelHalf = pit.wallThk*1.5;
+    const interiorReach = Math.min(350, Math.min(pit.width,pit.length)*0.4);
+    const interiorHalf = pit.wallThk/2 + interiorReach; // reaches to / past inner wall
+    const exteriorHalf = pit.wallThk/2 + EXT_STUB;
+
     const g = el("g",{transform:`rotate(${rot+inst.angle} ${cx} ${cy})`, style:"cursor:pointer;"});
     g.addEventListener("click", (e)=>{
       e.stopPropagation();
@@ -688,24 +741,28 @@ function renderScene(){
       document.getElementById("panel").classList.remove("hidden");
       document.getElementById("toggleBtn").textContent="Hide inputs";
     });
-    // plan-view pipe symbol: OD outer parallel lines (solid), ID inner parallel lines (dotted)
-    g.appendChild(el("rect",{x:cx-rOD, y:cy-barrelHalf, width:rOD*2, height:barrelHalf*2, fill:color, opacity:0.10, stroke:color,"stroke-width":1.4}));
-    g.appendChild(el("rect",{x:cx-rID, y:cy-barrelHalf+2, width:rID*2, height:barrelHalf*2-4, fill:"none", stroke:color,"stroke-width":1,"stroke-dasharray":"2,2"}));
+    // plan-view pipe: outer diameter width only, extending to inner wall and 500mm outside
+    g.appendChild(el("rect",{x:cx-rOD, y:cy-exteriorHalf, width:rOD*2, height:exteriorHalf+interiorHalf, fill:color, opacity:0.14, stroke:color,"stroke-width":1.4}));
+    // break/continuation ticks at the outer (exterior) end
+    const by = cy-exteriorHalf;
+    g.appendChild(el("line",{x1:cx-rOD-5,y1:by+9,x2:cx-rOD+5,y2:by-1,stroke:color,"stroke-width":1.2}));
+    g.appendChild(el("line",{x1:cx+rOD-5,y1:by+9,x2:cx+rOD+5,y2:by-1,stroke:color,"stroke-width":1.2}));
 
     let intoPit = inst.type==="inlet";
     if(inst.flowReversed) intoPit = !intoPit;
     const dir = intoPit ? 1 : -1;
-    const a1 = cy + dir*(barrelHalf*0.35), a2 = cy + dir*(barrelHalf*0.95);
+    const arrowReach = pit.wallThk*1.6;
+    const a1 = cy + dir*(arrowReach*0.4), a2 = cy + dir*(arrowReach*0.95);
     g.appendChild(el("line",{x1:cx,y1:a1,x2:cx,y2:a2,stroke:color,"stroke-width":2}));
     const headLen=9, headW=6, tipY=a2, backY=a2-dir*headLen;
     g.appendChild(el("polygon",{points:`${cx},${tipY} ${cx-headW},${backY} ${cx+headW},${backY}`, fill:color}));
 
     if(selectedPipeId===inst.parentId){
-      g.appendChild(el("rect",{x:cx-rOD-6, y:cy-barrelHalf-6, width:rOD*2+12, height:barrelHalf*2+12, fill:"none", stroke:"var(--accent)","stroke-width":2,"stroke-dasharray":"4,3"}));
+      g.appendChild(el("rect",{x:cx-rOD-6, y:cy-exteriorHalf-6, width:rOD*2+12, height:exteriorHalf+interiorHalf+12, fill:"none", stroke:"var(--accent)","stroke-width":2,"stroke-dasharray":"4,3"}));
     }
     svg.appendChild(g);
 
-    const labelGap = barrelHalf + 18;
+    const labelGap = pit.wallThk*1.9 + 16;
     const lx = inst.side==="W" ? cx-labelGap : inst.side==="E" ? cx+labelGap : cx;
     const ly = inst.side==="N" ? cy-labelGap : inst.side==="S" ? cy+labelGap : cy;
     const anchor = inst.side==="W" ? "end" : inst.side==="E" ? "start" : "middle";
@@ -740,6 +797,9 @@ function renderAll(){ renderPitList(); renderPitSettings(); renderPipeCards(); r
       state = saved;
       state.pits.forEach(pit=>{
         if(pit.defaultPipeWT===undefined) pit.defaultPipeWT=20;
+        if(pit.coverType===undefined) pit.coverType="closed";
+        if(pit.grateW===undefined) pit.grateW=600;
+        if(pit.grateH===undefined) pit.grateH=600;
         pit.pipes.forEach(p=>{
           if(p.type===undefined) p.type = "inlet";
           if(p.flowReversed===undefined) p.flowReversed=false;
@@ -750,10 +810,6 @@ function renderAll(){ renderPitList(); renderPitSettings(); renderPipeCards(); r
           if(p.count===undefined) p.count=2;
           if(p.spacingMode===undefined) p.spacingMode="default";
           if(p.spacing===undefined) p.spacing=pit.spacing;
-          // migrate legacy corner-based offset to centre-based, best effort
-          if(typeof p.offset==="number" && p._legacyMigrated===undefined){
-            p._legacyMigrated = true;
-          }
         });
       });
       const maxId = Math.max(1, ...state.pits.flatMap(p=>[p.id, ...p.pipes.map(pp=>pp.id)]));
