@@ -4,6 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Pit Checker</title>
+<!--
+  Pit Checker — Changelog
+  v0.1  Initial prototype: single pit, top view, pipe fit / corner clearance check
+  v0.2  Multi-pit projects, IndexedDB persistence, pipe reorder, auto-centred spacing
+  v0.3  Collapsible pipe cards, cross-section pipe circles, dimension lines, flow arrows,
+        label size control, click-to-filter selection
+  v0.4  Versioning + in-file changelog, multi-pipe groups per wall (equal size/skew for now),
+        group centring from wall centre with manual override, pinch/scroll zoom with
+        screen-constant dynamic label sizing, plan-view pipe symbol (no circles in top view —
+        circles reserved for future elevation views), TOP VIEW title, outlet label clipping fix
+-->
 <style>
   :root{
     --paper:#EEF2F1; --grid:#DCE4E2; --ink:#16232E;
@@ -55,18 +66,21 @@
   .pipe-card .pipe-head b{ font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .pipe-card .pipe-head .meta{ font-size:10.5px; color:var(--line-muted); flex-shrink:0; }
   .pipe-card .pipe-body{ padding:0 10px 10px; }
+  .pipe-card .subnote{ font-size:11px; color:var(--line-muted); margin:2px 0 10px; }
   .reorder-btns{ display:flex; gap:2px; flex-shrink:0; }
   .remove-btn{ background:none; border:none; color:var(--fail); font-size:12px; cursor:pointer; padding:2px 6px; flex-shrink:0; }
-  .auto-offset-display{ font-size:12px; color:var(--line-muted); padding:8px; background:#EFF2F1; border-radius:3px; border:1px dashed #C7D0CC; }
+  .auto-offset-display{ font-size:12px; color:var(--line-muted); padding:8px; background:#EFF2F1; border-radius:3px; border:1px dashed #C7D0CC; margin-bottom:10px; }
   .canvas-wrap{ flex:1; min-width:0; display:flex; flex-direction:column; padding:18px; }
-  .canvas-toolbar{ display:flex; justify-content:flex-end; gap:6px; margin-bottom:8px; }
-  .canvas-toolbar button{ background:#fff; border:1px solid var(--grid); border-radius:3px; width:28px; height:28px; font-size:13px; cursor:pointer; color:var(--ink); }
+  .canvas-toolbar{ display:flex; justify-content:space-between; align-items:center; gap:6px; margin-bottom:8px; }
+  .view-title{ font-size:12px; font-weight:700; letter-spacing:0.08em; color:var(--ink); }
+  .zoom-controls{ display:flex; gap:6px; }
+  .canvas-toolbar button{ background:#fff; border:1px solid var(--grid); border-radius:3px; width:28px; height:28px; font-size:14px; cursor:pointer; color:var(--ink); }
   .canvas-toolbar button:hover{ background:var(--paper); }
   .status-banner{ display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:4px; font-size:13px; margin-bottom:14px; font-weight:600; }
   .status-banner.pass{ background:#E4F0E8; color:var(--pass); border:1px solid #BEDBC8; }
   .status-banner.fail{ background:#F5E5DF; color:var(--fail); border:1px solid #E5BEAF; }
   .status-dot{ width:9px; height:9px; border-radius:50%; background:currentColor; flex-shrink:0; }
-  .svg-frame{ flex:1; min-height:400px; background:#FBFCFB; border:1px solid var(--grid); border-radius:4px; display:flex; align-items:center; justify-content:center; }
+  .svg-frame{ flex:1; min-height:400px; background:#FBFCFB; border:1px solid var(--grid); border-radius:4px; display:flex; align-items:center; justify-content:center; touch-action:none; overflow:hidden; }
   svg{ width:100%; height:100%; }
   .issue-list{ margin-top:12px; font-size:12.5px; }
   .issue-list .issue{ padding:7px 10px; border-left:3px solid var(--fail); background:#F5E5DF; margin-bottom:6px; border-radius:0 3px 3px 0; color:#7A3521; }
@@ -84,7 +98,7 @@
 <body>
 <div class="app">
   <header>
-    <div class="title"><b>Pit Checker</b><span>Top view · pipe fit &amp; clearance</span></div>
+    <div class="title"><b>Pit Checker</b><span id="versionLabel">v0.4 · Top view · pipe fit &amp; clearance</span></div>
     <button id="toggleBtn">Hide inputs</button>
   </header>
   <div class="body-row">
@@ -114,6 +128,7 @@
         <div class="field"><label>Default pipe spacing, c/c (mm)</label><input id="pipeSpacing" type="number" step="10"></div>
         <div class="field"><label>Default pipe wall thk (mm)</label><input id="defaultPipeWT" type="number" step="1"></div>
       </div>
+      <div class="subnote">Default spacing is a placeholder — confirm the exact figure against the current VicRoads/DTP standard drawing for your project before relying on it.</div>
 
       <div class="section-label">Pipes <span id="pipeCountLabel" style="font-weight:400;font-size:11px;"></span></div>
       <div id="filterChipWrap"></div>
@@ -125,10 +140,14 @@
     <div class="canvas-wrap">
       <div class="status-banner" id="statusBanner"></div>
       <div class="canvas-toolbar">
-        <button id="labelMinus" title="Smaller labels">A−</button>
-        <button id="labelPlus" title="Larger labels">A+</button>
+        <span class="view-title">TOP VIEW</span>
+        <span class="zoom-controls">
+          <button id="zoomOut" title="Zoom out">−</button>
+          <button id="zoomReset" title="Reset view">⤢</button>
+          <button id="zoomIn" title="Zoom in">+</button>
+        </span>
       </div>
-      <div class="svg-frame"><svg id="pitSvg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet"></svg></div>
+      <div class="svg-frame" id="svgFrame"><svg id="pitSvg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet"></svg></div>
       <div class="issue-list" id="issueList"></div>
     </div>
   </div>
@@ -139,20 +158,21 @@ const SIDES = ["N","E","S","W"];
 let idCounter = 1;
 const newId = () => idCounter++;
 let selectedPipeId = null;
+let zoomScale = 1, panX = 0, panY = 0;
+let lastVB = null, lastFitVB = null;
 
 function defaultPit(name){
   return {
     id:newId(), name:name||"Pit 01", width:600, length:600, wallThk:75, cornerClear:150, spacing:300,
-    defaultPipeWT:20, labelSize:12,
+    defaultPipeWT:20,
     pipes:[
-      { id:newId(), label:"Inlet 1", side:"N", diameter:300, angle:0, mode:"auto", offset:300, type:"inlet",
-        flowReversed:false, wtMode:"default", wallThk:20, collapsed:true },
-      { id:newId(), label:"Outlet", side:"S", diameter:375, angle:0, mode:"auto", offset:300, type:"outlet",
-        flowReversed:false, wtMode:"default", wallThk:20, collapsed:true }
+      { id:newId(), label:"Inlet 1", side:"N", diameter:300, angle:0, mode:"auto", offset:0, type:"inlet",
+        flowReversed:false, wtMode:"default", wallThk:20, collapsed:true, multi:false, count:2, spacingMode:"default", spacing:300 },
+      { id:newId(), label:"Outlet", side:"S", diameter:375, angle:0, mode:"auto", offset:0, type:"outlet",
+        flowReversed:false, wtMode:"default", wallThk:20, collapsed:true, multi:false, count:2, spacingMode:"default", spacing:300 }
     ]
   };
 }
-
 let state = { projectName:"Project 01", pits:[ defaultPit("Pit 01") ], activePitId:null };
 state.activePitId = state.pits[0].id;
 
@@ -194,13 +214,19 @@ function el(tag, attrs, children){
   if(children) children.forEach(c => e.appendChild(c));
   return e;
 }
-function text(x,y,str,opts={}){
-  const t = el("text", Object.assign({x,y,"font-size":opts.size||13,fill:opts.fill||"var(--line-muted)","font-family":"'Segoe UI',sans-serif","text-anchor":opts.anchor||"middle","font-weight":opts.weight||"400"},opts.attrs||{}));
+function px2u(px){
+  const rect = document.getElementById("svgFrame").getBoundingClientRect();
+  const w = (lastFitVB ? lastFitVB.w/zoomScale : 1000);
+  return px * (w / Math.max(1,rect.width));
+}
+function text(x,y,strPx,str,opts={}){
+  const t = el("text", Object.assign({x,y,"font-size":px2u(strPx),fill:opts.fill||"var(--line-muted)","font-family":"'Segoe UI',sans-serif","text-anchor":opts.anchor||"middle","font-weight":opts.weight||"400"},opts.attrs||{}));
   t.textContent = str;
   return t;
 }
 
-// ---------- Pit list panel ----------
+// ---------- Pit list ----------
+function resetView(){ zoomScale=1; panX=0; panY=0; }
 function renderPitList(){
   const list = document.getElementById("pitList");
   list.innerHTML = "";
@@ -215,8 +241,7 @@ function renderPitList(){
       </span>`;
     row.addEventListener("click", (e)=>{
       if(e.target.closest("button")) return;
-      state.activePitId = pit.id;
-      selectedPipeId = null;
+      state.activePitId = pit.id; selectedPipeId = null; resetView();
       renderAll();
     });
     list.appendChild(row);
@@ -232,25 +257,19 @@ function renderPitList(){
       } else if(btn.dataset.act==="dup"){
         const src = state.pits.find(p=>p.id===id);
         const copy = JSON.parse(JSON.stringify(src));
-        copy.id = newId();
-        copy.name = src.name + " copy";
+        copy.id = newId(); copy.name = src.name + " copy";
         copy.pipes.forEach(p=>p.id=newId());
-        state.pits.push(copy);
-        state.activePitId = copy.id;
+        state.pits.push(copy); state.activePitId = copy.id;
       }
-      selectedPipeId = null;
-      renderAll();
-      scheduleSave();
+      selectedPipeId = null; resetView();
+      renderAll(); scheduleSave();
     });
   });
 }
 document.getElementById("addPitBtn").addEventListener("click", ()=>{
   const p = defaultPit("Pit " + String(state.pits.length+1).padStart(2,"0"));
-  state.pits.push(p);
-  state.activePitId = p.id;
-  selectedPipeId = null;
-  renderAll();
-  scheduleSave();
+  state.pits.push(p); state.activePitId = p.id; selectedPipeId=null; resetView();
+  renderAll(); scheduleSave();
 });
 
 // ---------- Pit settings ----------
@@ -272,8 +291,7 @@ function renderPitSettings(){
     const pit = getActivePit();
     pit[field] = isNum ? (parseFloat(e.target.value)||0) : e.target.value;
     if(field==="name") renderPitList();
-    renderScene();
-    scheduleSave();
+    renderScene(); scheduleSave();
   });
 });
 
@@ -301,14 +319,27 @@ function renderPipeCards(){
     const card = document.createElement("div");
     card.className = "pipe-card";
     const autoDisplay = p.mode==="auto"
-      ? `<div class="auto-offset-display">Auto-centred: ${Math.round(p._autoOffset||0)}mm from near corner</div>`
-      : `<div class="field"><label>Offset from near corner (mm)</label><input type="number" data-field="offset" data-id="${p.id}" value="${p.offset}" step="10"></div>`;
+      ? `<div class="auto-offset-display">Auto-centred: ${Math.round(p._autoOffsetFromCentre||0)}mm from wall centre</div>`
+      : `<div class="field"><label>Offset from wall centre (mm) — + = East/South</label><input type="number" data-field="offset" data-id="${p.id}" value="${p.offset}" step="10"></div>`;
     const wtDisplay = p.wtMode==="manual"
       ? `<div class="field"><label>Pipe wall thickness (mm)</label><input type="number" data-field="wallThk" data-id="${p.id}" value="${p.wallThk}" step="1"></div>`
       : `<div class="auto-offset-display">Using default wall thk: ${pit.defaultPipeWT}mm</div>`;
+    const multiBlock = p.multi ? `
+        <div class="field-row">
+          <div class="field"><label>Number of pipes</label><input type="number" data-field="count" data-id="${p.id}" value="${p.count||2}" min="2" step="1"></div>
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" id="spc-${p.id}" data-field="spacingMode" data-id="${p.id}" ${p.spacingMode==="manual"?"checked":""}>
+          <label for="spc-${p.id}" style="margin:0;">Override spacing within this group</label>
+        </div>
+        ${p.spacingMode==="manual"
+          ? `<div class="field"><label>Spacing, centre-to-centre (mm)</label><input type="number" data-field="spacing" data-id="${p.id}" value="${p.spacing||pit.spacing}" step="10"></div>`
+          : `<div class="auto-offset-display">Using default spacing: ${pit.spacing}mm</div>`}
+        <div class="subnote">All pipes in this group currently share size &amp; skew — per-pipe sizing is planned for later.</div>
+      ` : "";
     card.innerHTML = `
       <div class="pipe-head" data-toggle="${p.id}">
-        <span class="htext"><span class="chevron">${isOpen?"▾":"▸"}</span><b>${p.label}</b></span>
+        <span class="htext"><span class="chevron">${isOpen?"▾":"▸"}</span><b>${p.label}${p.multi?` (×${p.count||2})`:""}</b></span>
         <span class="meta">${p.side} · ⌀${p.diameter}</span>
         <span class="reorder-btns">
           <button class="icon-btn" data-act="up" data-id="${p.id}" ${idx===0?"disabled":""}>▲</button>
@@ -336,6 +367,11 @@ function renderPipeCards(){
           <div class="field"><label>Skew angle (°)</label><input type="number" data-field="angle" data-id="${p.id}" value="${p.angle}" step="5" min="-60" max="60"></div>
         </div>
         <div class="checkbox-row">
+          <input type="checkbox" id="multi-${p.id}" data-field="multi" data-id="${p.id}" ${p.multi?"checked":""}>
+          <label for="multi-${p.id}" style="margin:0;">Multiple pipes on this wall (same size for now)</label>
+        </div>
+        ${multiBlock}
+        <div class="checkbox-row">
           <input type="checkbox" id="manual-${p.id}" data-field="mode" data-id="${p.id}" ${p.mode==="manual"?"checked":""}>
           <label for="manual-${p.id}" style="margin:0;">Manually set offset</label>
         </div>
@@ -357,11 +393,10 @@ function renderPipeCards(){
   list.querySelectorAll("[data-toggle]").forEach(head=>{
     head.addEventListener("click", ()=>{
       const id = parseInt(head.dataset.toggle);
-      if(selectedPipeId===id) return; // filtered single view stays open
+      if(selectedPipeId===id) return;
       const pipe = pit.pipes.find(p=>p.id===id);
       pipe.collapsed = !pipe.collapsed;
-      renderPipeCards();
-      scheduleSave();
+      renderPipeCards(); scheduleSave();
     });
   });
   list.querySelectorAll("input[type=text],input[type=number],select").forEach(inp=>{
@@ -372,8 +407,8 @@ function renderPipeCards(){
       const pipe = pit.pipes.find(p=>p.id===id);
       if(!pipe) return;
       pipe[field] = (field==="label"||field==="side"||field==="type") ? e.target.value : parseFloat(e.target.value)||0;
-      renderScene();
-      scheduleSave();
+      if(field==="count") pipe.count = Math.max(2, Math.round(pipe.count));
+      renderScene(); scheduleSave();
     });
   });
   list.querySelectorAll("input[type=checkbox]").forEach(cb=>{
@@ -385,16 +420,20 @@ function renderPipeCards(){
       if(!pipe) return;
       if(field==="mode"){
         pipe.mode = e.target.checked ? "manual" : "auto";
-        if(pipe.mode==="manual") pipe.offset = pipe._autoOffset || pipe.offset;
+        if(pipe.mode==="manual") pipe.offset = pipe._autoOffsetFromCentre || 0;
       } else if(field==="wtMode"){
         pipe.wtMode = e.target.checked ? "manual" : "default";
         if(pipe.wtMode==="manual") pipe.wallThk = pipe.wallThk || pit.defaultPipeWT;
       } else if(field==="flowReversed"){
         pipe.flowReversed = e.target.checked;
+      } else if(field==="multi"){
+        pipe.multi = e.target.checked;
+        if(pipe.multi && !pipe.count) pipe.count = 2;
+      } else if(field==="spacingMode"){
+        pipe.spacingMode = e.target.checked ? "manual" : "default";
+        if(pipe.spacingMode==="manual") pipe.spacing = pipe.spacing || pit.spacing;
       }
-      renderPipeCards();
-      renderScene();
-      scheduleSave();
+      renderPipeCards(); renderScene(); scheduleSave();
     });
   });
   list.querySelectorAll("[data-act]").forEach(btn=>{
@@ -406,9 +445,7 @@ function renderPipeCards(){
       if(act==="remove"){ pit.pipes.splice(idx,1); if(selectedPipeId===id) selectedPipeId=null; }
       if(act==="up" && idx>0){ [pit.pipes[idx-1],pit.pipes[idx]]=[pit.pipes[idx],pit.pipes[idx-1]]; }
       if(act==="down" && idx<pit.pipes.length-1){ [pit.pipes[idx+1],pit.pipes[idx]]=[pit.pipes[idx],pit.pipes[idx+1]]; }
-      renderPipeCards();
-      renderScene();
-      scheduleSave();
+      renderPipeCards(); renderScene(); scheduleSave();
     });
   });
   const clearBtn = document.getElementById("clearFilterBtn");
@@ -418,106 +455,178 @@ function renderPipeCards(){
 document.getElementById("addPipeBtn").addEventListener("click", ()=>{
   const pit = getActivePit();
   pit.pipes.push({ id:newId(), label:"Pipe "+(pit.pipes.length+1), side:"E", diameter:225, angle:0, mode:"auto",
-    offset:150, type:"inlet", flowReversed:false, wtMode:"default", wallThk:pit.defaultPipeWT, collapsed:false });
-  renderPipeCards();
-  renderScene();
-  scheduleSave();
+    offset:0, type:"inlet", flowReversed:false, wtMode:"default", wallThk:pit.defaultPipeWT, collapsed:false,
+    multi:false, count:2, spacingMode:"default", spacing:pit.spacing });
+  renderPipeCards(); renderScene(); scheduleSave();
 });
-
 document.getElementById("toggleBtn").addEventListener("click", ()=>{
   const panel = document.getElementById("panel");
   panel.classList.toggle("hidden");
   document.getElementById("toggleBtn").textContent = panel.classList.contains("hidden") ? "Show inputs" : "Hide inputs";
   renderScene();
 });
-document.getElementById("labelPlus").addEventListener("click", ()=>{
-  const pit = getActivePit(); pit.labelSize = Math.min(20,(pit.labelSize||12)+1); renderScene(); scheduleSave();
-});
-document.getElementById("labelMinus").addEventListener("click", ()=>{
-  const pit = getActivePit(); pit.labelSize = Math.max(8,(pit.labelSize||12)-1); renderScene(); scheduleSave();
-});
+document.getElementById("projectName").addEventListener("input", e=>{ state.projectName = e.target.value; scheduleSave(); });
 
-// ---------- Auto layout + checks ----------
+// ---------- Zoom ----------
+const svgFrameEl = document.getElementById("svgFrame");
+function clampZ(v){ return Math.max(0.5, Math.min(4, v)); }
+function applyZoom(factor, clientX, clientY){
+  if(lastVB && lastFitVB){
+    const rect = svgFrameEl.getBoundingClientRect();
+    const relX = (clientX-rect.left)/rect.width, relY = (clientY-rect.top)/rect.height;
+    const pxUser = lastVB.x + relX*lastVB.w, pyUser = lastVB.y + relY*lastVB.h;
+    zoomScale = clampZ(zoomScale*factor);
+    const newW = lastFitVB.w/zoomScale, newH = lastFitVB.h/zoomScale;
+    const newX = pxUser - relX*newW, newY = pyUser - relY*newH;
+    panX = newX - (lastFitVB.w-newW)/2;
+    panY = newY - (lastFitVB.h-newH)/2;
+  } else {
+    zoomScale = clampZ(zoomScale*factor);
+  }
+  renderScene();
+}
+svgFrameEl.addEventListener("wheel", e=>{
+  e.preventDefault();
+  applyZoom(e.deltaY<0 ? 1.12 : 1/1.12, e.clientX, e.clientY);
+},{passive:false});
+let pinchStartDist=null, pinchStartScale=1, pinchMid=null;
+function touchDist(t1,t2){ return Math.hypot(t2.clientX-t1.clientX, t2.clientY-t1.clientY); }
+svgFrameEl.addEventListener("touchstart", e=>{
+  if(e.touches.length===2){
+    pinchStartDist = touchDist(e.touches[0],e.touches[1]);
+    pinchStartScale = zoomScale;
+    pinchMid = {x:(e.touches[0].clientX+e.touches[1].clientX)/2, y:(e.touches[0].clientY+e.touches[1].clientY)/2};
+  }
+},{passive:true});
+svgFrameEl.addEventListener("touchmove", e=>{
+  if(e.touches.length===2 && pinchStartDist){
+    e.preventDefault();
+    const d = touchDist(e.touches[0],e.touches[1]);
+    const factor = (d/pinchStartDist);
+    const targetScale = clampZ(pinchStartScale*factor);
+    applyZoom(targetScale/zoomScale, pinchMid.x, pinchMid.y);
+  }
+},{passive:false});
+svgFrameEl.addEventListener("touchend", e=>{ if(e.touches.length<2) pinchStartDist=null; });
+svgFrameEl.addEventListener("dblclick", ()=>{ resetView(); renderScene(); });
+document.getElementById("zoomIn").addEventListener("click", ()=>{
+  const r=svgFrameEl.getBoundingClientRect(); applyZoom(1.25, r.left+r.width/2, r.top+r.height/2);
+});
+document.getElementById("zoomOut").addEventListener("click", ()=>{
+  const r=svgFrameEl.getBoundingClientRect(); applyZoom(0.8, r.left+r.width/2, r.top+r.height/2);
+});
+document.getElementById("zoomReset").addEventListener("click", ()=>{ resetView(); renderScene(); });
+
+// ---------- Layout: groups, auto positions, checks ----------
 function wallLenFor(pit, side){ return (side==="N"||side==="S") ? pit.width : pit.length; }
+
 function computeAutoPositions(pit){
   SIDES.forEach(side=>{
     const wallLen = wallLenFor(pit, side);
-    const autoPipes = pit.pipes.filter(p=>p.side===side && p.mode==="auto");
-    const n = autoPipes.length;
-    const spacing = pit.spacing || 300;
-    const totalSpan = spacing*(n-1);
-    const start = wallLen/2 - totalSpan/2;
-    autoPipes.forEach((p,i)=>{ p._autoOffset = start + i*spacing; });
+    const entries = pit.pipes.filter(p=>p.side===side);
+    const spacingDefault = pit.spacing || 300;
+    entries.forEach(p=>{
+      const n = p.multi ? Math.max(2, p.count||2) : 1;
+      const sp = (p.multi && p.spacingMode==="manual") ? (p.spacing||spacingDefault) : spacingDefault;
+      p._internalSpan = sp*(n-1);
+      p._groupSpacingUsed = sp;
+    });
+    const autoEntries = entries.filter(p=>p.mode==="auto");
+    const gap = spacingDefault;
+    const totalBlockSpan = autoEntries.reduce((s,p)=>s+p._internalSpan,0) + gap*Math.max(0,autoEntries.length-1);
+    let cursor = wallLen/2 - totalBlockSpan/2;
+    autoEntries.forEach(p=>{
+      const centroid = cursor + p._internalSpan/2;
+      p._autoOffsetFromCorner = centroid;
+      p._autoOffsetFromCentre = centroid - wallLen/2;
+      cursor += p._internalSpan + gap;
+    });
   });
 }
-function effectiveOffset(p){ return p.mode==="auto" ? (p._autoOffset||0) : p.offset; }
-
-function checkPipe(pit, pipe){
+function centroidFromCorner(pit,p){
+  if(p.mode==="auto") return p._autoOffsetFromCorner;
+  return wallLenFor(pit,p.side)/2 + p.offset;
+}
+function expandGroup(pit,p){
+  const centroid = centroidFromCorner(pit,p);
+  const n = p.multi ? Math.max(2,p.count||2) : 1;
+  const sp = p._groupSpacingUsed || pit.spacing || 300;
+  const start = centroid - sp*(n-1)/2;
+  const out=[];
+  for(let i=0;i<n;i++){
+    out.push({
+      parentId:p.id, side:p.side, diameter:p.diameter, angle:p.angle, type:p.type, flowReversed:p.flowReversed,
+      wt:pipeWT(pit,p), offsetFromCorner:start+i*sp,
+      label: n>1 ? `${p.label} #${i+1}` : p.label
+    });
+  }
+  return out;
+}
+function allInstances(pit){
+  let out=[];
+  pit.pipes.forEach(p => out = out.concat(expandGroup(pit,p)));
+  return out;
+}
+function checkInstance(pit, inst){
   const issues = [];
-  const wallLen = wallLenFor(pit, pipe.side);
-  const skewFactor = 1/Math.cos(pipe.angle*Math.PI/180);
-  const footprint = pipe.diameter * Math.abs(skewFactor);
+  const wallLen = wallLenFor(pit, inst.side);
+  const skewFactor = 1/Math.cos(inst.angle*Math.PI/180);
+  const footprint = inst.diameter * Math.abs(skewFactor);
   const clear = pit.cornerClear;
-  const offset = effectiveOffset(pipe);
-  const startPos = offset - footprint/2;
-  const endPos = offset + footprint/2;
-  if(startPos < clear) issues.push(`${pipe.label}: only ${Math.max(0,Math.round(startPos))}mm to near corner — needs ${clear}mm`);
-  if(wallLen - endPos < clear) issues.push(`${pipe.label}: only ${Math.max(0,Math.round(wallLen-endPos))}mm to far corner — needs ${clear}mm`);
-  if(footprint > wallLen - 2*clear && wallLen - 2*clear > 0) issues.push(`${pipe.label}: skewed footprint (${Math.round(footprint)}mm) doesn't fit between corner clearances`);
-  if(startPos < 0 || endPos > wallLen) issues.push(`${pipe.label}: extends beyond the wall — reduce spacing or offset`);
+  const startPos = inst.offsetFromCorner - footprint/2;
+  const endPos = inst.offsetFromCorner + footprint/2;
+  if(startPos < clear) issues.push(`${inst.label}: only ${Math.max(0,Math.round(startPos))}mm to near corner — needs ${clear}mm`);
+  if(wallLen - endPos < clear) issues.push(`${inst.label}: only ${Math.max(0,Math.round(wallLen-endPos))}mm to far corner — needs ${clear}mm`);
+  if(footprint > wallLen - 2*clear && wallLen - 2*clear > 0) issues.push(`${inst.label}: skewed footprint (${Math.round(footprint)}mm) doesn't fit between corner clearances`);
+  if(startPos < 0 || endPos > wallLen) issues.push(`${inst.label}: extends beyond the wall — reduce spacing or offset`);
   return issues;
 }
 
-// ---------- Dimension line helpers ----------
+// ---------- Dimension lines ----------
 function dimHorizontal(svg, y, points, dir){
-  // points: sorted array of {pos, label?}; dir: 1 = ticks/text below y, -1 = above
   for(let i=0;i<points.length-1;i++){
-    const x1=points[i].pos, x2=points[i+1].pos;
-    const len = x2-x1;
+    const x1=points[i], x2=points[i+1], len=x2-x1;
     if(len<=1) continue;
     svg.appendChild(el("line",{x1,y1:y,x2,y2:y+dir*6,stroke:"var(--line-muted)","stroke-width":1}));
     svg.appendChild(el("line",{x1:x2,y1:y,x2:x2,y2:y+dir*6,stroke:"var(--line-muted)","stroke-width":1}));
-    svg.appendChild(el("line",{x1,y1:y,x2,y2:y,stroke:"var(--line-muted)","stroke-width":0.75}));
     svg.appendChild(el("line",{x1,y1:y,x2:x2,y2:y,stroke:"var(--line-muted)","stroke-width":0.75}));
-    if(len>26) svg.appendChild(text((x1+x2)/2, y+dir*15, Math.round(len)+"", {size:9.5, fill:"var(--line-muted)"}));
+    if(len>26) svg.appendChild(text((x1+x2)/2, y+dir*15, 9.5, Math.round(len)+"", {fill:"var(--line-muted)"}));
   }
 }
 function dimVertical(svg, x, points, dir){
   for(let i=0;i<points.length-1;i++){
-    const y1=points[i].pos, y2=points[i+1].pos;
-    const len = y2-y1;
+    const y1=points[i], y2=points[i+1], len=y2-y1;
     if(len<=1) continue;
     svg.appendChild(el("line",{x1:x,y1,x2:x+dir*6,y2:y1,stroke:"var(--line-muted)","stroke-width":1}));
     svg.appendChild(el("line",{x1:x,y1:y2,x2:x+dir*6,y2:y2,stroke:"var(--line-muted)","stroke-width":1}));
     svg.appendChild(el("line",{x1:x,y1,x2:x,y2:y2,stroke:"var(--line-muted)","stroke-width":0.75}));
     if(len>26){
-      const t = text(x+dir*15,(y1+y2)/2, Math.round(len)+"", {size:9.5, fill:"var(--line-muted)"});
+      const t = text(x+dir*15,(y1+y2)/2, 9.5, Math.round(len)+"", {fill:"var(--line-muted)"});
       t.setAttribute("transform",`rotate(-90 ${x+dir*15} ${(y1+y2)/2})`);
       svg.appendChild(t);
     }
   }
 }
-function buildWallPoints(pit, side){
+function buildWallPoints(pit, side, instances){
   const wallLen = wallLenFor(pit, side);
   const pts = [0];
-  pit.pipes.filter(p=>p.side===side).sort((a,b)=>effectiveOffset(a)-effectiveOffset(b)).forEach(p=>{
+  instances.filter(p=>p.side===side).sort((a,b)=>a.offsetFromCorner-b.offsetFromCorner).forEach(p=>{
     const skewFactor = 1/Math.cos(p.angle*Math.PI/180);
     const r = Math.abs(skewFactor)*p.diameter/2;
-    const o = effectiveOffset(p);
-    pts.push(o-r, o+r);
+    pts.push(p.offsetFromCorner-r, p.offsetFromCorner+r);
   });
   pts.push(wallLen);
-  return pts.filter((v,i,a)=> i===0 || v>a[i-1]+0.5).map(v=>({pos:v}));
+  return pts.filter((v,i,a)=> i===0 || v>a[i-1]+0.5);
 }
 
-// ---------- Render scene ----------
+// ---------- Render ----------
 function renderScene(){
   const pit = getActivePit();
   computeAutoPositions(pit);
-  const LS = pit.labelSize || 12;
+  const instances = allInstances(pit);
 
   let allIssues = [];
-  pit.pipes.forEach(p => { allIssues = allIssues.concat(checkPipe(pit, p)); });
+  instances.forEach(inst => { allIssues = allIssues.concat(checkInstance(pit, inst)); });
 
   const banner = document.getElementById("statusBanner");
   const issueBox = document.getElementById("issueList");
@@ -535,74 +644,72 @@ function renderScene(){
   svg.innerHTML = "";
   const pad = 175;
   const outerW = pit.width + pit.wallThk*2, outerL = pit.length + pit.wallThk*2;
-  const vbW = outerW + pad*2, vbH = outerL + pad*2;
-  svg.setAttribute("viewBox", `0 0 ${vbW} ${vbH}`);
+  const fitW = outerW + pad*2, fitH = outerL + pad*2;
+  lastFitVB = {w:fitW, h:fitH};
+  const curW = fitW/zoomScale, curH = fitH/zoomScale;
+  const curX = (fitW-curW)/2 + panX, curY = (fitH-curH)/2 + panY;
+  lastVB = {x:curX,y:curY,w:curW,h:curH};
+  svg.setAttribute("viewBox", `${curX} ${curY} ${curW} ${curH}`);
+
   const ox = pad, oy = pad, ix = ox+pit.wallThk, iy = oy+pit.wallThk;
 
   const outerRect = el("rect",{x:ox,y:oy,width:outerW,height:outerL,fill:"var(--wall-fill)",stroke:"var(--wall)","stroke-width":2,style:"cursor:pointer;"});
   outerRect.addEventListener("click", ()=>{ selectedPipeId=null; renderPipeCards(); document.getElementById("panel").classList.remove("hidden"); document.getElementById("toggleBtn").textContent="Hide inputs"; });
   svg.appendChild(outerRect);
   svg.appendChild(el("rect",{x:ix,y:iy,width:pit.width,height:pit.length,fill:"var(--paper)",stroke:"var(--wall)","stroke-width":1.5}));
-  svg.appendChild(text(ox+outerW/2, oy-64, `${pit.name} — internal ${pit.width} × ${pit.length}mm, wall ${pit.wallThk}mm`, {size:13, fill:"var(--ink)", weight:"700"}));
-  svg.appendChild(text(ox+outerW/2, oy-92, "N", {size:LS+2, fill:"var(--ink)", weight:"700"}));
-  svg.appendChild(text(ox+outerW/2, oy+outerL+92, "S", {size:LS+2, fill:"var(--ink)", weight:"700"}));
-  svg.appendChild(text(ox-95, oy+outerL/2, "W", {size:LS+2, fill:"var(--ink)", weight:"700", attrs:{"dominant-baseline":"middle"}}));
-  svg.appendChild(text(ox+outerW+95, oy+outerL/2, "E", {size:LS+2, fill:"var(--ink)", weight:"700", attrs:{"dominant-baseline":"middle"}}));
+  svg.appendChild(text(ox+outerW/2, oy-64, 13, `${pit.name} — internal ${pit.width} × ${pit.length}mm, wall ${pit.wallThk}mm`, {fill:"var(--ink)", weight:"700"}));
+  svg.appendChild(text(ox+outerW/2, oy-92, 15, "N", {fill:"var(--ink)", weight:"700"}));
+  svg.appendChild(text(ox+outerW/2, oy+outerL+92, 15, "S", {fill:"var(--ink)", weight:"700"}));
+  svg.appendChild(text(ox-95, oy+outerL/2, 15, "W", {fill:"var(--ink)", weight:"700", attrs:{"dominant-baseline":"middle"}}));
+  svg.appendChild(text(ox+outerW+95, oy+outerL/2, 15, "E", {fill:"var(--ink)", weight:"700", attrs:{"dominant-baseline":"middle"}}));
 
-  // dimension lines just outside each wall
-  dimHorizontal(svg, oy-30, buildWallPoints(pit,"N").map(pt=>({pos:ix+pt.pos})), -1);
-  dimHorizontal(svg, oy+outerL+30, buildWallPoints(pit,"S").map(pt=>({pos:ix+pt.pos})), 1);
-  dimVertical(svg, ox-30, buildWallPoints(pit,"W").map(pt=>({pos:iy+pt.pos})), -1);
-  dimVertical(svg, ox+outerW+30, buildWallPoints(pit,"E").map(pt=>({pos:iy+pt.pos})), 1);
+  dimHorizontal(svg, oy-30, buildWallPoints(pit,"N",instances).map(v=>ix+v), -1);
+  dimHorizontal(svg, oy+outerL+30, buildWallPoints(pit,"S",instances).map(v=>ix+v), 1);
+  dimVertical(svg, ox-30, buildWallPoints(pit,"W",instances).map(v=>iy+v), -1);
+  dimVertical(svg, ox+outerW+30, buildWallPoints(pit,"E",instances).map(v=>iy+v), 1);
 
-  pit.pipes.forEach(p=>{
-    const isFail = checkPipe(pit, p).length>0;
+  instances.forEach(inst=>{
+    const isFail = checkInstance(pit, inst).length>0;
     const color = isFail ? "var(--pipe-fail)" : "var(--pipe)";
-    const rOD = p.diameter/2;
-    const wt = pipeWT(pit,p);
-    const rID = Math.max(2, p.diameter/2 - wt);
-    const offset = effectiveOffset(p);
+    const rOD = inst.diameter/2;
+    const rID = Math.max(2, inst.diameter/2 - inst.wt);
     let cx, cy, rot=0;
-    if(p.side==="N"){ cx=ix+offset; cy=oy+pit.wallThk/2; rot=0; }
-    if(p.side==="S"){ cx=ix+offset; cy=oy+outerL-pit.wallThk/2; rot=180; }
-    if(p.side==="W"){ cx=ox+pit.wallThk/2; cy=iy+offset; rot=270; }
-    if(p.side==="E"){ cx=ox+outerW-pit.wallThk/2; cy=iy+offset; rot=90; }
+    if(inst.side==="N"){ cx=ix+inst.offsetFromCorner; cy=oy+pit.wallThk/2; rot=0; }
+    if(inst.side==="S"){ cx=ix+inst.offsetFromCorner; cy=oy+outerL-pit.wallThk/2; rot=180; }
+    if(inst.side==="W"){ cx=ox+pit.wallThk/2; cy=iy+inst.offsetFromCorner; rot=270; }
+    if(inst.side==="E"){ cx=ox+outerW-pit.wallThk/2; cy=iy+inst.offsetFromCorner; rot=90; }
 
-    const g = el("g",{transform:`rotate(${rot+p.angle} ${cx} ${cy})`, style:"cursor:pointer;"});
+    const barrelHalf = pit.wallThk*1.5;
+    const g = el("g",{transform:`rotate(${rot+inst.angle} ${cx} ${cy})`, style:"cursor:pointer;"});
     g.addEventListener("click", (e)=>{
       e.stopPropagation();
-      selectedPipeId = p.id;
+      selectedPipeId = inst.parentId;
       renderPipeCards();
       document.getElementById("panel").classList.remove("hidden");
       document.getElementById("toggleBtn").textContent="Hide inputs";
     });
-    // barrel crossing the wall (faint)
-    g.appendChild(el("rect",{x:cx-rOD, y:cy-pit.wallThk*1.6, width:rOD*2, height:pit.wallThk*3.2, fill:color, opacity:0.14}));
-    // outer diameter — solid
-    g.appendChild(el("circle",{cx,cy,r:rOD, fill:color, opacity:0.10, stroke:color,"stroke-width":1.6}));
-    // inner diameter — dotted
-    g.appendChild(el("circle",{cx,cy,r:rID, fill:"none", stroke:color,"stroke-width":1.1,"stroke-dasharray":"2,2"}));
+    // plan-view pipe symbol: OD outer parallel lines (solid), ID inner parallel lines (dotted)
+    g.appendChild(el("rect",{x:cx-rOD, y:cy-barrelHalf, width:rOD*2, height:barrelHalf*2, fill:color, opacity:0.10, stroke:color,"stroke-width":1.4}));
+    g.appendChild(el("rect",{x:cx-rID, y:cy-barrelHalf+2, width:rID*2, height:barrelHalf*2-4, fill:"none", stroke:color,"stroke-width":1,"stroke-dasharray":"2,2"}));
 
-    // flow arrow: +y(base, pre-rotation) = into pit
-    let intoPit = p.type==="inlet";
-    if(p.flowReversed) intoPit = !intoPit;
+    let intoPit = inst.type==="inlet";
+    if(inst.flowReversed) intoPit = !intoPit;
     const dir = intoPit ? 1 : -1;
-    const a1 = cy + dir*(pit.wallThk*0.55), a2 = cy + dir*(pit.wallThk*1.55);
+    const a1 = cy + dir*(barrelHalf*0.35), a2 = cy + dir*(barrelHalf*0.95);
     g.appendChild(el("line",{x1:cx,y1:a1,x2:cx,y2:a2,stroke:color,"stroke-width":2}));
-    const headLen=9, headW=6;
-    const tipY = a2, backY = a2 - dir*headLen;
+    const headLen=9, headW=6, tipY=a2, backY=a2-dir*headLen;
     g.appendChild(el("polygon",{points:`${cx},${tipY} ${cx-headW},${backY} ${cx+headW},${backY}`, fill:color}));
 
-    if(selectedPipeId===p.id){
-      g.appendChild(el("circle",{cx,cy,r:rOD+6, fill:"none", stroke:"var(--accent)","stroke-width":2,"stroke-dasharray":"4,3"}));
+    if(selectedPipeId===inst.parentId){
+      g.appendChild(el("rect",{x:cx-rOD-6, y:cy-barrelHalf-6, width:rOD*2+12, height:barrelHalf*2+12, fill:"none", stroke:"var(--accent)","stroke-width":2,"stroke-dasharray":"4,3"}));
     }
     svg.appendChild(g);
 
-    const labelGap = LS+8;
-    const lx = p.side==="W" ? cx-rOD-labelGap : p.side==="E" ? cx+rOD+labelGap : cx;
-    const ly = p.side==="N" ? cy-rOD-14 : p.side==="S" ? cy+rOD+14+LS : cy;
-    const anchor = p.side==="W" ? "end" : p.side==="E" ? "start" : "middle";
-    svg.appendChild(text(lx,ly,`${p.label} ⌀${p.diameter}`,{size:LS, fill:isFail?"var(--fail)":"var(--ink)", anchor, weight:"600"}));
+    const labelGap = barrelHalf + 18;
+    const lx = inst.side==="W" ? cx-labelGap : inst.side==="E" ? cx+labelGap : cx;
+    const ly = inst.side==="N" ? cy-labelGap : inst.side==="S" ? cy+labelGap : cy;
+    const anchor = inst.side==="W" ? "end" : inst.side==="E" ? "start" : "middle";
+    svg.appendChild(text(lx,ly,12,`${inst.label} ⌀${inst.diameter}`,{fill:isFail?"var(--fail)":"var(--ink)", anchor, weight:"600"}));
   });
 
   const clearColor = "#B0761F";
@@ -622,13 +729,7 @@ function renderScene(){
   });
 }
 
-function renderAll(){
-  renderPitList();
-  renderPitSettings();
-  renderPipeCards();
-  renderScene();
-}
-document.getElementById("projectName").addEventListener("input", e=>{ state.projectName = e.target.value; scheduleSave(); });
+function renderAll(){ renderPitList(); renderPitSettings(); renderPipeCards(); renderScene(); }
 
 // ---------- Boot ----------
 (async function boot(){
@@ -639,13 +740,20 @@ document.getElementById("projectName").addEventListener("input", e=>{ state.proj
       state = saved;
       state.pits.forEach(pit=>{
         if(pit.defaultPipeWT===undefined) pit.defaultPipeWT=20;
-        if(pit.labelSize===undefined) pit.labelSize=12;
         pit.pipes.forEach(p=>{
           if(p.type===undefined) p.type = "inlet";
           if(p.flowReversed===undefined) p.flowReversed=false;
           if(p.wtMode===undefined) p.wtMode="default";
           if(p.wallThk===undefined) p.wallThk=pit.defaultPipeWT;
           if(p.collapsed===undefined) p.collapsed=true;
+          if(p.multi===undefined) p.multi=false;
+          if(p.count===undefined) p.count=2;
+          if(p.spacingMode===undefined) p.spacingMode="default";
+          if(p.spacing===undefined) p.spacing=pit.spacing;
+          // migrate legacy corner-based offset to centre-based, best effort
+          if(typeof p.offset==="number" && p._legacyMigrated===undefined){
+            p._legacyMigrated = true;
+          }
         });
       });
       const maxId = Math.max(1, ...state.pits.flatMap(p=>[p.id, ...p.pipes.map(pp=>pp.id)]));
